@@ -96,7 +96,8 @@ code, .mono { font-family: var(--mono); font-size: 0.92em; }
 .brand-mark svg { width: 16px; height: 16px; }
 .brand-name { font-weight: 650; letter-spacing: -0.01em; white-space: nowrap; }
 .brand-sub { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
-.concept-nav { display: flex; gap: 2px; padding: 3px; margin-left: auto; background: var(--surface-2); border-radius: 9px; box-shadow: inset 0 0 0 1px var(--line-2); }
+.concept-nav { display: flex; gap: 2px; padding: 3px; margin-left: auto; background: var(--surface-2); border-radius: 9px; box-shadow: inset 0 0 0 1px var(--line-2); overflow-x: auto; scrollbar-width: none; }
+.concept-nav::-webkit-scrollbar { display: none; }
 .concept-nav a {
   padding: 5px 12px; border-radius: 7px; color: var(--ink-2); font-size: 13px; font-weight: 520; white-space: nowrap;
 }
@@ -198,6 +199,18 @@ h1, h2, h3 { margin: 0; letter-spacing: -0.015em; }
 .badge.serious { background: var(--serious-wash); color: var(--serious-ink); }
 .badge.critical { background: var(--critical-wash); color: var(--critical-ink); }
 .badge.neutral { background: var(--surface-3); color: var(--ink-2); }
+.health-tip, .state-help { position: relative; display: inline-flex; border-radius: 999px; }
+.health-tip:focus-visible, .state-help:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.health-tip::after, .state-help::after {
+  content: attr(data-health-tip); position: absolute; z-index: 30; left: 50%; bottom: calc(100% + 8px); width: max-content;
+  max-width: min(280px, calc(100vw - 24px)); padding: 7px 9px; border-radius: 7px; background: var(--ink); color: var(--surface);
+  box-shadow: 0 4px 16px rgba(0,0,0,.18); font-size: 12px; font-weight: 500; line-height: 1.35; white-space: normal;
+  opacity: 0; pointer-events: none; transform: translate(-50%, 3px); transition: opacity .12s, transform .12s;
+}
+.state-help::after { content: attr(data-state-tip); }
+.health-tip:hover::after, .health-tip:focus::after, .health-tip.tip-open::after, .state-help:hover::after, .state-help:focus::after { opacity: 1; transform: translate(-50%, 0); }
+.qcard .health-tip::after { left: auto; right: 0; transform: translateY(3px); }
+.qcard .health-tip:hover::after, .qcard .health-tip:focus::after, .qcard .health-tip.tip-open::after { transform: translateY(0); }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
 
 /* ---------- buttons, inputs ---------- */
@@ -321,6 +334,7 @@ table.t tbody tr[aria-selected="true"] td:first-child { box-shadow: inset 3px 0 
   .topbar { padding: 0 12px; gap: 8px; height: 52px; }
   .timebar { top: 52px; }
   .demo-chip { display: none; }
+  .concept-nav { max-width: calc(100vw - 100px); }
   .concept-nav a { padding: 5px 8px; font-size: 12.5px; }
   .timebar-inner { padding: 8px 16px; gap: 6px 12px; }
   .tb-time { font-size: 19px; }

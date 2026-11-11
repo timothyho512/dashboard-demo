@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DBQ Console Concepts</title>
+<title>DBQ Console</title>
 <script>try { var t = localStorage.getItem('dbq-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
 <link rel="stylesheet" href="assets/dbq.css">
 <style>
@@ -21,6 +21,10 @@
   .thumb { position: relative; aspect-ratio: 16 / 10; background: var(--surface-2); border-bottom: 1px solid var(--line); overflow: hidden; }
   .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top left; display: block; }
   .thumb .t-dark { display: none; }
+  .dev-thumb { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-content: center; padding: 18px; }
+  .dev-thumb span { height: 58px; border-radius: 7px; background: var(--surface); box-shadow: var(--shadow); position: relative; overflow: hidden; }
+  .dev-thumb span::before { content: ""; position: absolute; left: 10px; right: 28%; top: 12px; height: 5px; border-radius: 3px; background: var(--axis); }
+  .dev-thumb span::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 12px; height: 12px; border-radius: 3px; background: var(--accent-wash); border-left: 3px solid var(--accent); }
   :root[data-theme="dark"] .thumb .t-dark { display: block; }
   :root[data-theme="dark"] .thumb .t-light { display: none; }
   @media (prefers-color-scheme: dark) {
@@ -81,10 +85,10 @@
 <body>
 <main class="page" id="main">
   <section class="hero">
-    <p class="eyebrow">DBQ Console · three concept directions</p>
-    <h1>One database queue, three ways to look at it.</h1>
-    <p class="lede">AIS writes work items into shared tables and MMP claims them, so the producer never waits on the consumer. When something goes wrong in between, nobody has a console to see it. These prototypes replay the same invented Thursday through three different consoles, each built for a different person and a different question.</p>
-    <p class="lede">Every page has the same replay bar: press play, drag through the day, or jump to a story moment below.</p>
+    <p class="eyebrow">DBQ Console · one product, six tabs</p>
+    <h1>See the queue, the workers, and the database behind them.</h1>
+    <p class="lede">AIS writes work items into shared tables and MMP claims them, so the producer never waits on the consumer. These prototypes replay the same invented Thursday through three operational views and three developer views.</p>
+    <p class="lede">Every page has the same replay bar. Press play, drag through the day, or jump to a story moment below.</p>
   </section>
 
   <section class="concepts" id="concepts" aria-label="Concepts"></section>
@@ -99,7 +103,7 @@
     <a class="file" href="sql/schema.sql"><span class="f-name">sql/schema.sql</span><span class="f-d">The assumed queue table and optional helper tables, each index labelled with the panels that need it.</span></a>
     <a class="file" href="sql/dialects.md"><span class="f-name">sql/dialects.md</span><span class="f-d">Oracle 19c and SQL Server versions of the key queries, and what behaves differently there.</span></a>
     <a class="file" href="sql/seed.sql"><span class="f-name">sql/seed.sql</span><span class="f-d">Deterministic synthetic data that reproduces the day's story for the SQL.</span></a>
-    <a class="file" href="assets/sim.js"><span class="f-name">prototype/assets/sim.js</span><span class="f-d">The simulated day, minute by minute. All three concepts read the same numbers from it.</span></a>
+    <a class="file" href="assets/sim.js"><span class="f-name">prototype/assets/sim.js</span><span class="f-d">The simulated day, minute by minute. All six tabs read the same numbers from it.</span></a>
   </section>
 
   <p class="footnote" style="margin-top:20px">Every name, number, file and id here is invented. Actions are simulated and nothing writes anywhere. The pages need no server and no network: open the files directly.</p>
@@ -130,12 +134,31 @@
       points: ['Findings ranked by urgency, each with the plain SQL rule that raised it.',
                'Tells a poison message from a retry storm, and a data fault from a dependency outage.',
                'Item search by id, payment reference or file, and an incident timeline ready for the ticket.'] }
+    ,{ id: 'queue', href: 'queue.html', tag: 'Developer view', name: 'Queue health', thumb: false,
+      q: 'Is this queue healthy for the pattern it implements?',
+      who: 'developers who own a producer, consumer, or queue contract.',
+      points: ['Six declared patterns, each with its own health signals and healthy-means sentence.',
+               'The selected pattern changes the panels instead of forcing every queue into one score.',
+               'Outbox and dead-letter examples complete the existing Thursday story.'] }
+    ,{ id: 'consumers', href: 'consumers.html', tag: 'Developer view', name: 'Consumers', thumb: false,
+      q: 'Which worker is limiting throughput, and would another consumer help?',
+      who: 'developers diagnosing worker liveness, thread use, and claim contention.',
+      points: ['Per-instance threads, heartbeat, claims, hold time, and throughput.',
+               'Little\'s law capacity answer that rejects more consumers during the retry storm.',
+               'The 10:42 silent worker is named before queue depth looks unhealthy.'] }
+    ,{ id: 'database', href: 'database.html', tag: 'Developer view', name: 'Database cost', thumb: false,
+      q: 'What is the queue workload costing PostgreSQL?',
+      who: 'developers and database owners watching churn, vacuum, queries, and retention.',
+      points: ['Table and index size, dead rows, vacuum recency, and query timings.',
+               'Purge throughput compared with completed-row growth.',
+               'A plain verdict that changes during the big file and retry storm.'] }
   ];
 
   U.$('#concepts').innerHTML = CONCEPTS.map(function (c) {
     return '<a class="card concept" href="' + c.href + '">' +
+      (c.thumb === false ? '<div class="thumb dev-thumb" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>' :
       '<div class="thumb"><img class="t-light" src="assets/thumb-' + c.id + '-light.jpg" alt="" width="960" height="600" loading="lazy">' +
-      '<img class="t-dark" src="assets/thumb-' + c.id + '-dark.jpg" alt="" width="960" height="600" loading="lazy"></div>' +
+      '<img class="t-dark" src="assets/thumb-' + c.id + '-dark.jpg" alt="" width="960" height="600" loading="lazy"></div>') +
       '<div class="c-body"><span class="c-tag">' + esc(c.tag) + '</span><h2 class="c-name">' + esc(c.name) + '</h2>' +
       '<p class="c-q">' + esc(c.q) + '</p>' +
       '<p class="c-for"><b>For</b> ' + esc(c.who) + '</p>' +
@@ -164,7 +187,7 @@
     '<button class="icon-btn" type="button" id="themeBtn" aria-label="Toggle light or dark theme">' + U.ICON.sun + U.ICON.moon + '</button></div>';
   document.body.insertBefore(top, document.body.firstChild);
   if (matchMedia('(max-width: 560px)').matches) {
-    U.$$('.concept-nav a', top).forEach(function (a, i) { a.querySelector('.lbl-long').textContent = ['Console', 'Flow', 'Triage'][i]; });
+    U.$$('.concept-nav a', top).forEach(function (a, i) { a.querySelector('.lbl-long').textContent = ['Console', 'Flow', 'Triage', 'Queue', 'Workers', 'Database'][i]; });
   }
   U.$('#themeBtn').addEventListener('click', function () {
     var root = document.documentElement;

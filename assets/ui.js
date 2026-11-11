@@ -92,6 +92,12 @@
     listeners.forEach(function (fn) { fn(state.m, opts || {}); });
   }
   function onTime(fn) { listeners.push(fn); }
+  window.addEventListener('hashchange', function () {
+    var t = parseHash().t;
+    if (!t || !/^\d\d:\d\d$/.test(t)) return;
+    var m = D.hm(+t.slice(0, 2), +t.slice(3));
+    if (m >= 0 && m < D.N && m !== state.m) setTime(m, { hash: true });
+  });
 
   /* ---------- day heat for the scrubber ---------- */
   var dayHealth = null;
@@ -117,7 +123,10 @@
   var PAGES = [
     { id: 'console', href: 'console.html', label: 'Control room', short: 'Console' },
     { id: 'flow', href: 'flow.html', label: 'Flow map', short: 'Flow' },
-    { id: 'triage', href: 'triage.html', label: 'Triage', short: 'Triage' }
+    { id: 'triage', href: 'triage.html', label: 'Triage', short: 'Triage' },
+    { id: 'queue', href: 'queue.html', label: 'Queue health', short: 'Queue' },
+    { id: 'consumers', href: 'consumers.html', label: 'Consumers', short: 'Workers' },
+    { id: 'database', href: 'database.html', label: 'Database cost', short: 'Database' }
   ];
   function mountChrome(opts) {
     var narrow = matchMedia('(max-width: 560px)').matches;
@@ -135,7 +144,11 @@
       '<button class="icon-btn" type="button" id="themeBtn" aria-label="Toggle light or dark theme">' + ICON.sun + ICON.moon + '</button></div>';
     document.body.insertBefore(top, document.body.firstChild);
     $('#themeBtn').addEventListener('click', toggleTheme);
-    if (narrow) $$('.concept-nav a', top).forEach(function (a, i) { a.querySelector('.lbl-long').textContent = PAGES[i].short; });
+    if (narrow) {
+      $$('.concept-nav a', top).forEach(function (a, i) { a.querySelector('.lbl-long').textContent = PAGES[i].short; });
+      var activeNav = $('.concept-nav a[aria-current="page"]', top), nav = $('.concept-nav', top);
+      if (activeNav && nav) nav.scrollLeft = Math.max(0, activeNav.offsetLeft + activeNav.offsetWidth - nav.clientWidth + 4);
+    }
 
     var tb = document.createElement('div');
     tb.className = 'timebar';

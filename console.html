@@ -131,8 +131,8 @@
         <div class="chart-note" id="ageNote"></div>
       </div>
       <div class="card chart-card">
-        <div class="card-h"><h3 class="card-t">Items by state</h3><span class="spacer"></span>
-          <div class="legend"><span><i style="background:var(--s1)"></i>Waiting</span><span><i style="background:var(--s3)"></i>In flight</span><span><i style="background:var(--s7)"></i>Retry scheduled</span></div></div>
+        <div class="card-h"><h3 class="card-t">Work in progress</h3><span class="spacer"></span>
+          <div class="legend"><span><i style="background:var(--s3)"></i>In flight</span><span class="state-help" tabindex="0" data-state-tip="Failed, waiting for its next retry time"><i style="background:var(--s7)"></i>Retry scheduled</span><span><i style="background:var(--serious)"></i>Stuck</span></div></div>
         <div class="card-b"><div id="chDepth"></div></div>
       </div>
       <div class="card chart-card">
@@ -170,6 +170,24 @@
   var win = 180, itemTab = null;
 
   function sevOf(name, m) { return D.healthOf(name, m); }
+  function healthStatus(name, m, badge) {
+    var sev = sevOf(name, m), reason = D.healthReason(name, m);
+    return '<span class="health-tip" tabindex="0" data-health-tip="' + esc(reason) + '" aria-label="' + esc((U.SEV_LABEL[sev] || sev) + ': ' + reason) + '">' +
+      (badge ? U.badge(sev) : U.status(sev)) + '</span>';
+  }
+  function bindHealthTips() {
+    $$('.health-tip').forEach(function (el) {
+      if (el.dataset.healthBound) return;
+      el.dataset.healthBound = 'true';
+      el.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var wasOpen = el.classList.contains('tip-open');
+        $$('.health-tip.tip-open').forEach(function (x) { x.classList.remove('tip-open'); });
+        el.classList.toggle('tip-open', !wasOpen);
+      });
+      el.addEventListener('keydown', function (e) { if (e.key === 'Escape') el.classList.remove('tip-open'); });
+    });
+  }
 
   /* ---------- KPIs ---------- */
   function series(fn, m, n) { var a = []; for (var i = Math.max(0, m - n + 1); i <= m; i++) a.push(fn(i)); return a; }
@@ -222,7 +240,7 @@
       var cons = ''; for (var k = 0; k < v.total; k++) cons += '<i class="' + (k < v.live ? '' : 'off') + '"></i>';
       return '<tr class="clickable" data-q="' + q.name + '" aria-selected="' + (q.name === sel) + '" tabindex="0">' +
         '<td><div class="qname">' + esc(q.name) + '</div><div class="qblurb">' + esc(q.producer + ' → ' + q.consumer + ' · ' + q.blurb) + '</div></td>' +
-        '<td>' + U.status(r.sev) + '</td>' +
+        '<td>' + healthStatus(q.name, m, false) + '</td>' +
         '<td class="r">' + n0(v.waiting) + '</td>' +
         '<td class="r"><div class="agecell"><span class="num' + (v.oldest >= q.slo ? ' sev-critical' : '') + '">' + (v.oldest ? D.fmtDur(v.oldest) : '<span class="zero">none</span>') + '</span>' + ageMeter(v) + '</div></td>' +
         '<td class="r">' + U.rate(v.in5) + '</td><td class="r">' + U.rate(v.out5) + '</td>' +
@@ -235,16 +253,17 @@
     }).join('');
     $('#qcards').innerHTML = rows.map(function (r) {
       var v = r.v, q = v.q;
-      return '<button type="button" class="card qcard" data-q="' + q.name + '" aria-selected="' + (q.name === sel) + '">' +
+      return '<div role="button" tabindex="0" class="card qcard" data-q="' + q.name + '" aria-selected="' + (q.name === sel) + '">' +
         '<div><div class="qname">' + esc(q.name) + '</div><div class="qblurb">' + esc(q.producer + ' → ' + q.consumer) + '</div></div>' +
-        '<div>' + U.status(r.sev) + '</div>' +
+        '<div>' + healthStatus(q.name, m, false) + '</div>' +
         '<div class="row2"><span>Waiting <b>' + D.fmtNum(v.waiting) + '</b></span><span>Oldest <b>' + (v.oldest ? D.fmtDur(v.oldest) : 'none') + '</b></span>' +
-        '<span>Out <b>' + U.rate(v.out5) + '/min</b></span>' + (v.stuck ? '<span>Stuck <b>' + v.stuck + '</b></span>' : '') + (v.dead ? '<span>Dead <b>' + D.fmtNum(v.dead) + '</b></span>' : '') + '</div></button>';
+        '<span>Out <b>' + U.rate(v.out5) + '/min</b></span>' + (v.stuck ? '<span>Stuck <b>' + v.stuck + '</b></span>' : '') + (v.dead ? '<span>Dead <b>' + D.fmtNum(v.dead) + '</b></span>' : '') + '</div></div>';
     }).join('');
     $$('#qt tbody tr, #qcards .qcard').forEach(function (tr) {
       tr.addEventListener('click', function () { select(tr.dataset.q, true); });
-      tr.addEventListener('keydown', function (e) { if (e.key === 'Enter') select(tr.dataset.q, true); });
+      tr.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(tr.dataset.q, true); } });
     });
+    bindHealthTips();
   }
   function select(name, scroll) {
     sel = name; itemTab = null; U.writeHash({ q: name });
@@ -255,11 +274,12 @@
   /* ---------- detail ---------- */
   function renderHead(m) {
     var v = D.queueAt(sel, m), q = v.q, sev = sevOf(sel, m);
-    $('#dhead').innerHTML = '<h2>' + esc(q.name) + '</h2>' + U.badge(sev) +
+    $('#dhead').innerHTML = '<h2>' + esc(q.name) + '</h2>' + healthStatus(q.name, m, true) +
       '<div class="facts"><span>Producer <b>' + esc(q.producer) + '</b></span><span>Consumer <b>' + esc(q.consumer) + '</b></span>' +
       '<span>Wait target <b>' + D.fmtDur(q.slo) + '</b></span><span>Stale after <b>' + q.stale + 's</b> without heartbeat</span><span>Max attempts <b>' + q.maxAttempts + '</b></span></div>' +
       '<span class="spacer"></span><button class="btn sm" type="button" id="pauseBtn">Pause consuming…</button>';
     $('#pauseBtn').addEventListener('click', function () { confirmAction('pause', { queue: q.name }); });
+    bindHealthTips();
   }
   function windowRange(m) {
     var from = win === 'day' ? 0 : Math.max(0, m - win);
@@ -289,8 +309,8 @@
     else if (v.stuck) note = '<b>' + v.stuck + ' items are claimed by a consumer that stopped heartbeating.</b> They are not counted as waiting, so this chart cannot show them. See Consumers.';
     else note = 'Lag is measured as age, not count: ' + D.fmtNum(v.waiting) + ' waiting items are fine if the oldest is seconds old.';
     $('#ageNote').innerHTML = note;
-    U.chart($('#chDepth'), { height: 170, from: r.from, to: to, stack: true, label: 'Items by state',
-      series: [{ label: 'Waiting', color: 'var(--s1)', values: s.waiting }, { label: 'In flight', color: 'var(--s3)', values: s.inflight }, { label: 'Retry scheduled', color: 'var(--s7)', values: s.sched }],
+    U.chart($('#chDepth'), { height: 170, from: r.from, to: to, stack: true, label: 'Work in progress',
+      series: [{ label: 'In flight', color: 'var(--s3)', values: s.inflight }, { label: 'Retry scheduled', color: 'var(--s7)', values: s.sched }, { label: 'Stuck', color: 'var(--serious)', values: s.stuck }],
       tipFmt: function (x) { return D.fmtNum(x); }, markers: markers });
     U.chart($('#chTput'), { height: 170, from: r.from, to: to, label: 'Throughput per minute',
       series: [{ label: 'Arrived', color: 'var(--s1)', values: s.arr }, { label: 'Completed', color: 'var(--s3)', values: s.done }, { label: 'Failed', color: 'var(--critical)', values: s.fail, sparse: true }],

@@ -30,30 +30,39 @@
 
   /* ---------- queues ---------- */
   var QUEUES = [
-    { name: 'payments.inbound', producer: 'AIS', consumer: 'MMP', slo: 900, stale: 90, maxAttempts: 10,
+    { name: 'payments.inbound', pattern: 'ingestion-buffer', producer: 'AIS', consumer: 'MMP', slo: 900, stale: 90, maxAttempts: 10,
+      expectedArrival: 900, arrivalWarnMultiple: 2,
       workers: ['mmp-app-01', 'mmp-app-02', 'mmp-app-03', 'mmp-app-04'], perWorker: 200, procS: 3.1,
       blurb: 'Payment records split out of ingested files' },
-    { name: 'mandates.inbound', producer: 'AIS', consumer: 'MMP', slo: 900, stale: 90, maxAttempts: 10,
+    { name: 'mandates.inbound', pattern: 'ingestion-buffer', producer: 'AIS', consumer: 'MMP', slo: 900, stale: 90, maxAttempts: 10,
       workers: ['mmp-app-01', 'mmp-app-02', 'mmp-app-03', 'mmp-app-04'], perWorker: 30, procS: 2.4,
       blurb: 'Direct-debit mandate instructions' },
-    { name: 'ledger.postings', producer: 'MMP', consumer: 'Ledger', slo: 300, stale: 60, maxAttempts: 5,
+    { name: 'ledger.postings', pattern: 'deferred-recovery', producer: 'MMP', consumer: 'Ledger', slo: 300, stale: 60, maxAttempts: 5,
       workers: ['ledger-svc-01', 'ledger-svc-02'], perWorker: 520, procS: 0.9,
       blurb: 'Postings MMP hands to the ledger service' },
-    { name: 'notify.outbound', producer: 'MMP', consumer: 'Notifier', slo: 600, stale: 60, maxAttempts: 3,
+    { name: 'notify.outbound', pattern: 'background-work', producer: 'MMP', consumer: 'Notifier', slo: 600, stale: 60, maxAttempts: 3,
+      expectedArrival: 900, arrivalWarnMultiple: 2,
       workers: ['notify-svc-01'], perWorker: 240, procS: 1.6,
       blurb: 'Customer e-mail and SMS notifications' },
-    { name: 'recon.daily', producer: 'recon-scheduler', consumer: 'Recon', slo: 3600, stale: 120, maxAttempts: 5,
+    { name: 'recon.daily', pattern: 'background-work', producer: 'recon-scheduler', consumer: 'Recon', slo: 3600, stale: 120, maxAttempts: 5,
       workers: ['recon-batch-01'], perWorker: 40, procS: 9,
       blurb: 'Reconciliation tasks created by the scheduler' },
-    { name: 'audit.archive', producer: 'All services', consumer: 'Archiver', slo: 14400, stale: 300, maxAttempts: 5,
+    { name: 'audit.archive', pattern: 'consolidation', producer: 'All services', consumer: 'Archiver', slo: 14400, stale: 300, maxAttempts: 5,
       workers: ['archiver-01'], perWorker: 0, procS: 0.2,
-      blurb: 'Audit events copied to cold storage in batches' }
+      blurb: 'Audit events copied to cold storage in batches' },
+    { name: 'notify.outbox', pattern: 'transactional-outbox', producer: 'MMP', consumer: 'Outbox publisher', slo: 120, stale: 60, maxAttempts: 8,
+      workers: ['outbox-pub-01'], perWorker: 360, procS: 0.35,
+      blurb: 'Committed notification events waiting to publish to notify.outbound' },
+    { name: 'dead.letters', pattern: 'dead-letter', producer: 'All consumers', consumer: 'Operations', slo: 86400, stale: 600, maxAttempts: 1,
+      workers: ['dlq-admin-01'], perWorker: 0, procS: 0,
+      blurb: 'Dead-lettered items grouped for replay or discard' }
   ];
   var QI = {}; QUEUES.forEach(function (q, i) { QI[q.name] = i; });
 
   var STUCK = { worker: 'mmp-app-03', pid: 4211, min: hm(10, 42), sec: 13, claims: { 'payments.inbound': 25, 'mandates.inbound': 3 } };
   var BULK = { name: 'DEMO_FPS_BULK_20261015_1112.csv', rows: 48000, from: hm(11, 15), to: hm(11, 21) };
   var STORM = { from: hm(11, 50), to: hm(12, 14), okRate: 0.04 };
+  var PRODUCER_OUTAGE = { queue: 'notify.outbound', from: hm(13, 1), to: hm(13, 50) };
   var POISON = { id: 88120473, batch: 'DEMO_BACS_20261015_0900.csv', row: 1207, firstMin: hm(9, 0), firstSec: 41,
     backoffMin: [1, 2, 4, 8, 16, 30, 30, 30, 30], ref: 'PAY-DEMO-0900-1207',
     error: 'java.lang.IllegalArgumentException: creditor IBAN checksum invalid: GB00 DEMO 0000 1207 99' };
@@ -286,7 +295,10 @@
   simulate(QUEUES[3], {
     arrivalsAt: function (m) {
       var p = S['payments.inbound'].done[m];
-      return [{ batch: 'payment notices', producer: 'MMP', n: Math.round(p * between(0.08, 0.12)) }];
+      var n = Math.round(p * between(0.08, 0.12));
+      if (m === PRODUCER_OUTAGE.from - 1) n = Math.max(1, n);
+      if (m >= PRODUCER_OUTAGE.from && m <= PRODUCER_OUTAGE.to) n = 0;
+      return [{ batch: 'payment notices', producer: 'MMP', n: n }];
     },
     failFp: 'smtp', deadAtStart: 6,
     transient: function (m, k) { return rnd() < 0.07 && k > 0 ? { n: 1, fp: 'smtp' } : null; },
@@ -305,6 +317,23 @@
       ];
     },
     capacityAt: function (m) { return m % 15 === 7 ? 6000 : 0; }
+  });
+  // notify.outbox: one durable event per customer notification, then publish to notify.outbound.
+  simulate(QUEUES[6], {
+    arrivalsAt: function (m) {
+      var p = S['payments.inbound'].done[m];
+      return [{ batch: 'notification outbox', producer: 'MMP', n: Math.round(p * 0.1) }];
+    }
+  });
+  // dead.letters is a read-only operational view of items already dead-lettered in the story.
+  simulate(QUEUES[7], {
+    arrivalsAt: function (m) {
+      var n = 0;
+      ['payments.inbound', 'mandates.inbound', 'ledger.postings', 'notify.outbound'].forEach(function (qn) { n += S[qn].deadNew[m]; });
+      return [{ batch: 'dead-letter arrivals', producer: 'DBQ consumers', n: n }];
+    },
+    capacityAt: function () { return 0; },
+    deadAtStart: 7
   });
 
   // which batches the stuck worker was holding: the FPS file it was chewing at 10:42
@@ -326,6 +355,8 @@
   worker('notify-svc-01', 'notify-svc-01.demo.internal', 'Notifier', ['notify.outbound'], 4);
   worker('recon-batch-01', 'recon-batch-01.demo.internal', 'Recon', ['recon.daily'], 2);
   worker('archiver-01', 'archiver-01.demo.internal', 'Archiver', ['audit.archive'], 1);
+  worker('outbox-pub-01', 'outbox-pub-01.demo.internal', 'MMP', ['notify.outbox'], 4);
+  worker('dlq-admin-01', 'dlq-admin-01.demo.internal', 'Operations', ['dead.letters'], 1);
   WORKERS['mmp-app-03'].pid = STUCK.pid;
   // heartbeat age per worker per minute (seconds); claims held per worker per queue
   Object.keys(WORKERS).forEach(function (id) {
@@ -426,6 +457,19 @@
         out.push({ id: 'slo:' + q.name, rule: 'Wait-time SLO', sev: 'warning', queue: q.name, sinceM: m,
           title: q.name + ' is approaching its wait target', metric: v.oldest, v: v });
       }
+      // silent producer: a configured cadence has missed its allowed number of intervals
+      if (q.expectedArrival) {
+        var lastArrival = m;
+        while (lastArrival >= 0 && !s.arr[lastArrival]) lastArrival--;
+        var noArrivalS = lastArrival < 0 ? (m + 1) * 60 : (m - lastArrival) * 60;
+        if (noArrivalS > q.expectedArrival * q.arrivalWarnMultiple) {
+          out.push({ id: 'silent-producer:' + q.name, rule: 'Silent producer', sev: 'warning', queue: q.name,
+            sinceM: lastArrival + Math.floor(q.expectedArrival * q.arrivalWarnMultiple / 60) + 1,
+            title: q.name + ': No arrivals for ' + fmtDur(noArrivalS) + ' (usually every ' + fmtDur(q.expectedArrival) + ')',
+            reason: 'No arrivals for ' + fmtDur(noArrivalS) + '; usually every ' + fmtDur(q.expectedArrival),
+            metric: noArrivalS, v: v, lastArrivalM: lastArrival });
+        }
+      }
       // retry storm: lots of failures across many items with one fingerprint, against the trailing-hour median
       var f5 = sum(s.fail, m - 4, m), base = median(s.fail, m - 64, m - 5) * 5;
       if (f5 >= 300 && f5 > Math.max(base, 5) * 8) {
@@ -471,10 +515,26 @@
   }
 
   function healthOf(name, m) {
-    var f = findingsAt(m).filter(function (x) {
+    var f = healthFindings(name, m);
+    return f.length ? f[0].sev : 'good';
+  }
+
+  function healthFindings(name, m) {
+    return findingsAt(m).filter(function (x) {
       return x.sev !== 'info' && (x.queue === name || (x.queues && x.queues.some(function (h) { return h.queue === name; })));
     });
-    return f.length ? f[0].sev : 'good';
+  }
+
+  function healthReason(name, m) {
+    var f = healthFindings(name, m)[0], q = QUEUES[QI[name]], v = queueAt(name, m);
+    if (!f) return 'All checks pass';
+    if (f.reason) return f.reason;
+    if (f.rule === 'Wait-time SLO') return 'Oldest wait ' + fmtDur(v.oldest) + ', target ' + fmtDur(q.slo);
+    if (f.rule === 'Retry storm') return fmtNum(Math.round(v.fail5)) + ' failures/min across many items';
+    if (f.rule === 'Stuck claims') return f.worker + ' silent for ' + fmtDur(WORKERS[f.worker].hb[m]) + ', holding ' + (f.queues.filter(function (h) { return h.queue === name; })[0] || { n: 0 }).n + ' claims';
+    if (f.rule === 'Poison message' || f.rule === 'Dead letter') return 'One item failed ' + f.metric + ' times with the same error';
+    if (f.rule === 'Dead letters') return fmtNum(f.metric) + ' items are dead-lettered';
+    return f.title;
   }
 
   function fmtNum(n) { return Math.round(n).toLocaleString('en-GB'); }
@@ -490,9 +550,9 @@
   window.DBQ = {
     N: N, START_H: START_H, DATE_LABEL: DATE_LABEL, NOW_DEFAULT: hm(12, 6),
     QUEUES: QUEUES, QI: QI, S: S, WORKERS: WORKERS, batches: batches, batchesOf: batchesOf,
-    STUCK: STUCK, BULK: BULK, STORM: STORM, POISON: POISON, poisonAttempts: poisonAttempts, POISON_DEAD_S: POISON_DEAD_S,
+    STUCK: STUCK, BULK: BULK, STORM: STORM, PRODUCER_OUTAGE: PRODUCER_OUTAGE, POISON: POISON, poisonAttempts: poisonAttempts, POISON_DEAD_S: POISON_DEAD_S,
     FP: FP, ITEMS: ITEMS, EVENTS: EVENTS, CHAPTERS: CHAPTERS,
-    hm: hm, clock: clock, sum: sum, queueAt: queueAt, findingsAt: findingsAt, healthOf: healthOf,
+    hm: hm, clock: clock, sum: sum, queueAt: queueAt, findingsAt: findingsAt, healthOf: healthOf, healthReason: healthReason,
     fmtNum: fmtNum, fmtDur: fmtDur
   };
 })();

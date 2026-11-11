@@ -314,6 +314,14 @@
         { t: 'Pause consuming ' + f.queue + ' so retries stop burning attempts and dead-lettering postings.', a: btn('Pause ' + f.queue + '…', 'pause') },
         { t: 'When the gateway is back, unpause and retry the dead postings in one go (see the dead letters finding).' }];
       x.links = [['Open in the control room', link('console.html', m, f.queue)]];
+    } else if (k === 'silent-producer') {
+      x.cause = '<span class="mono">' + esc(q.producer) + '</span> has not written a new item since ' + D.clock(f.lastArrivalM) + '. The queue can look healthy because there is no backlog, but expected work is missing.';
+      x.selfHeal = false;
+      x.facts = [['Producer', esc(q.producer)], ['Last arrival', D.clock(f.lastArrivalM)], ['No arrivals for', D.fmtDur(f.metric)], ['Usual cadence', D.fmtDur(q.expectedArrival)], ['Alert after', q.arrivalWarnMultiple + ' missed intervals']];
+      x.rule = 'Fires when the time since the last item exceeds expected_arrival_s multiplied by arrival_warn_multiple for a queue with a declared producer cadence.';
+      x.sql = "-- sql/panels.sql P36\nSELECT c.queue_name, MAX(i.created_at) AS last_arrival_at\n  FROM dbq_queue_config c\n  LEFT JOIN dbq_item i ON i.queue_name = c.queue_name\n WHERE c.expected_arrival_s IS NOT NULL\n GROUP BY c.queue_name, c.expected_arrival_s, c.arrival_warn_multiple\nHAVING NOW() - MAX(i.created_at) > c.expected_arrival_s * c.arrival_warn_multiple * INTERVAL '1 second';";
+      x.steps = [{ t: 'Check the ' + esc(q.producer) + ' producer and its source feed. Do not add consumers because there is no queued work to drain.' }, { t: 'Confirm whether the cadence changed. If it did, update the queue configuration rather than silencing the alert.' }];
+      x.links = [['Open in the control room', link('console.html', m, f.queue)]];
     } else if (k === 'stuck') {
       var w = D.WORKERS[D.STUCK.worker], tot = f.metric;
       x.cause = '<span class="mono">' + esc(D.STUCK.worker) + '</span> (pid ' + D.STUCK.pid + ') stopped heartbeating at ' + D.clock(D.STUCK.min, D.STUCK.sec) + ' while holding ' + f.queues.map(function (h) { return h.n + ' ' + h.queue.split('.')[0]; }).join(' and ') + '. Other consumers cannot see these items, and nothing in this queue design hands them back on its own.';
@@ -471,7 +479,7 @@
       st.push({ c: 'ok', t: it.createdS, h: 'Written by AIS', d: 'row ' + it.row + ' of ' + it.batch });
       it.attempts.forEach(function (a) { if (a.at <= nowS) st.push({ c: 'bad', t: a.at, h: 'Attempt ' + a.attempt + ' failed on ' + a.worker, d: 'IllegalArgumentException: creditor IBAN checksum invalid' }); });
       if (nowS >= it.deadS) { st.push({ c: 'bad', t: it.deadS, h: 'Moved to dead', d: 'ten attempts used up' }); status = U.badge('critical', 'Dead'); }
-      else { var nx = it.attempts.filter(function (a) { return a.at > nowS; })[0]; st.push({ c: 'now', t: nx ? nx.at : nowS, h: nx ? 'Next attempt scheduled' : 'Waiting', d: 'retry backoff' }); status = U.badge('warning', 'Retrying'); }
+      else { var nx = it.attempts.filter(function (a) { return a.at > nowS; })[0]; st.push({ c: 'now', t: nx ? nx.at : nowS, h: nx ? 'Retry scheduled' : 'Waiting', d: 'failed, waiting for its next retry time' }); status = U.badge('warning', 'Retry scheduled'); }
     } else if (it.kind === 'stuck') {
       st.push({ c: 'ok', t: it.createdS, h: 'Written by AIS', d: 'row ' + it.row + ' of ' + it.batch });
       if (nowS >= it.claimS) st.push({ c: 'ok', t: it.claimS, h: 'Claimed by ' + it.worker, d: 'attempt 1 started' });
@@ -500,7 +508,7 @@
       } else {
         var t = it.createdS + 8, gaps = [0, 61, 122, 243, 485];
         for (var a = 0; a < 5; a++) {
-          t += gaps[a]; if (t > nowS) { st.push({ c: 'now', t: t, h: 'Attempt ' + (a + 1) + ' scheduled', d: 'retry backoff' }); status = U.badge('warning', 'Retrying'); break; }
+          t += gaps[a]; if (t > nowS) { st.push({ c: 'now', t: t, h: 'Retry scheduled', d: 'failed, waiting for attempt ' + (a + 1) }); status = U.badge('warning', 'Retry scheduled'); break; }
           st.push({ c: 'bad', t: t, h: 'Attempt ' + (a + 1) + ' failed on ledger-svc-0' + (1 + a % 2), d: 'SocketTimeoutException: Read timed out (cbs-gateway) after 5000 ms' });
         }
         if (!status) { st.push({ c: 'bad', t: t + 1, h: 'Moved to dead', d: 'five attempts used up during the gateway outage' }); status = U.badge('critical', 'Dead'); }
