@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DBQ Console Concepts</title>
+<script>try { var t = localStorage.getItem('dbq-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<link rel="stylesheet" href="assets/dbq.css">
+<style>
+  .page { max-width: 1240px; }
+  .hero { padding: 28px 4px 8px; max-width: 820px; }
+  .eyebrow { font-size: 12px; font-weight: 620; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 10px; }
+  .hero h1 { font-size: 34px; line-height: 1.12; letter-spacing: -0.025em; font-weight: 680; margin: 0 0 14px; text-wrap: balance; }
+  .lede { font-size: 16px; line-height: 1.55; color: var(--ink-2); margin: 0 0 10px; }
+  .lede code, .row-d code { font-family: var(--mono); font-size: 0.9em; }
+
+  .concepts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 26px; }
+  .concept { display: flex; flex-direction: column; overflow: hidden; color: var(--ink); }
+  .concept:hover { text-decoration: none; box-shadow: var(--shadow-pop); }
+  .concept:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .thumb { position: relative; aspect-ratio: 16 / 10; background: var(--surface-2); border-bottom: 1px solid var(--line); overflow: hidden; }
+  .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top left; display: block; }
+  .thumb .t-dark { display: none; }
+  :root[data-theme="dark"] .thumb .t-dark { display: block; }
+  :root[data-theme="dark"] .thumb .t-light { display: none; }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .thumb .t-dark { display: block; }
+    :root:where(:not([data-theme="light"])) .thumb .t-light { display: none; }
+  }
+  .c-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+  .c-tag { font-size: 12px; font-weight: 620; color: var(--ink-3); letter-spacing: 0.02em; }
+  .c-name { font-size: 20px; font-weight: 670; letter-spacing: -0.015em; margin: -4px 0 0; }
+  .c-q { font-size: 14.5px; line-height: 1.45; margin: 0; color: var(--ink); }
+  .c-for { font-size: 13px; color: var(--ink-2); margin: 0; line-height: 1.45; }
+  .c-for b { color: var(--ink); font-weight: 600; }
+  .c-list { margin: 2px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .c-list li { position: relative; padding-left: 16px; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+  .c-list li::before { content: ""; position: absolute; left: 2px; top: 0.6em; width: 6px; height: 6px; border-radius: 2px; background: var(--accent); }
+  .c-open { margin-top: auto; padding-top: 8px; display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 620; color: var(--accent-ink); }
+  .c-open svg { width: 15px; height: 15px; transition: transform .15s; }
+  .concept:hover .c-open svg { transform: translateX(3px); }
+
+  .sec-h { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 40px 4px 12px; }
+  .sec-h h2 { font-size: 18px; font-weight: 660; letter-spacing: -0.01em; margin: 0; }
+  .sec-h p { margin: 0; font-size: 13px; color: var(--ink-3); }
+
+  .story { padding: 6px 0; }
+  .moment { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 4px 16px; align-items: center; padding: 12px 18px; border-top: 1px solid var(--line-2); }
+  .moment:first-child { border-top: 0; }
+  .m-time { font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .m-label { font-size: 14px; font-weight: 620; }
+  .m-blurb { font-size: 13px; color: var(--ink-2); line-height: 1.45; }
+  .m-links { display: flex; gap: 6px; }
+  .m-links a { font-size: 12px; font-weight: 560; padding: 4px 10px; border-radius: 999px; color: var(--ink-2); background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); white-space: nowrap; }
+  .m-links a:hover { text-decoration: none; color: var(--ink); background: var(--surface-3); }
+
+  .files { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; }
+  .file { display: flex; flex-direction: column; gap: 3px; padding: 14px 18px; border-top: 1px solid var(--line-2); color: var(--ink); }
+  .file:nth-child(-n+2) { border-top: 0; }
+  .file:nth-child(odd) { border-right: 1px solid var(--line-2); }
+  .file:hover { text-decoration: none; background: var(--surface-2); }
+  .f-name { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent-ink); }
+  .f-d { font-size: 13px; color: var(--ink-2); line-height: 1.45; }
+
+  @media (max-width: 1020px) {
+    .concepts { grid-template-columns: minmax(0, 1fr); max-width: 640px; }
+  }
+  @media (max-width: 760px) {
+    .hero { padding-top: 12px; }
+    .hero h1 { font-size: 27px; }
+    .lede { font-size: 15px; }
+    .moment { grid-template-columns: 52px minmax(0, 1fr); padding: 12px 14px; }
+    .m-links { grid-column: 2; margin-top: 4px; flex-wrap: wrap; }
+    .files { grid-template-columns: minmax(0, 1fr); }
+    .file:nth-child(2) { border-top: 1px solid var(--line-2); }
+    .file:nth-child(odd) { border-right: 0; }
+    .file { padding: 12px 14px; }
+  }
+</style>
+</head>
+<body>
+<main class="page" id="main">
+  <section class="hero">
+    <p class="eyebrow">DBQ Console · three concept directions</p>
+    <h1>One database queue, three ways to look at it.</h1>
+    <p class="lede">AIS writes work items into shared tables and MMP claims them, so the producer never waits on the consumer. When something goes wrong in between, nobody has a console to see it. These prototypes replay the same invented Thursday through three different consoles, each built for a different person and a different question.</p>
+    <p class="lede">Every page has the same replay bar: press play, drag through the day, or jump to a story moment below.</p>
+  </section>
+
+  <section class="concepts" id="concepts" aria-label="Concepts"></section>
+
+  <div class="sec-h"><h2>The day in the sample data</h2><p>Thu 15 Oct 2026, invented. Each link opens that moment in that concept.</p></div>
+  <section class="card story" id="story" aria-label="Story moments"></section>
+
+  <div class="sec-h"><h2>Behind the prototypes</h2><p>The queries are real and were run against 1.6 million synthetic rows on PostgreSQL 17.</p></div>
+  <section class="card files" aria-label="Files">
+    <a class="file" href="report.md"><span class="f-name">report.md</span><span class="f-d">What each concept is for, prior art, light-bulb ideas, the SQL behind every panel, build options and a first version to build.</span></a>
+    <a class="file" href="sql/panels.sql"><span class="f-name">sql/panels.sql</span><span class="f-d">One query per panel (P1 to P18), plus the claim, heartbeat and fenced completion they rely on.</span></a>
+    <a class="file" href="sql/schema.sql"><span class="f-name">sql/schema.sql</span><span class="f-d">The assumed queue table and optional helper tables, each index labelled with the panels that need it.</span></a>
+    <a class="file" href="sql/dialects.md"><span class="f-name">sql/dialects.md</span><span class="f-d">Oracle 19c and SQL Server versions of the key queries, and what behaves differently there.</span></a>
+    <a class="file" href="sql/seed.sql"><span class="f-name">sql/seed.sql</span><span class="f-d">Deterministic synthetic data that reproduces the day's story for the SQL.</span></a>
+    <a class="file" href="assets/sim.js"><span class="f-name">prototype/assets/sim.js</span><span class="f-d">The simulated day, minute by minute. All three concepts read the same numbers from it.</span></a>
+  </section>
+
+  <p class="footnote" style="margin-top:20px">Every name, number, file and id here is invented. Actions are simulated and nothing writes anywhere. The pages need no server and no network: open the files directly.</p>
+</main>
+
+<script src="assets/sim.js"></script>
+<script src="assets/ui.js"></script>
+<script>
+(function () {
+  var D = window.DBQ, U = window.DBQUI, esc = U.esc;
+
+  var CONCEPTS = [
+    { id: 'console', href: 'console.html', tag: 'Concept A', name: 'Control room',
+      q: 'Is every queue healthy right now? If not, which one, and what is it doing?',
+      who: 'whoever is on support today, with the page open all day.',
+      points: ['Lag is the age of the oldest waiting item against the queue’s target, not a count.',
+               'Stuck claims come from heartbeats, so a silent consumer shows even when depth looks fine.',
+               'Every item has a journey and a guarded action: preview, second approver, audit row.'] },
+    { id: 'flow', href: 'flow.html', tag: 'Concept B', name: 'Flow map',
+      q: 'Where does work pile up between the file and the ledger, and when will it clear?',
+      who: 'the people who own the pipeline: team leads, service owners, capacity planning.',
+      points: ['Producers, queues and consumers drawn from the data, with Burrow-style consumer verdicts.',
+               'A drain forecast and a what-if: how much sooner the backlog clears with one more consumer.',
+               'Who filled it: arrivals by upstream file, so a 48,000-row file is named, not guessed.'] },
+    { id: 'triage', href: 'triage.html', tag: 'Concept C', name: 'Triage',
+      q: 'What is wrong, why does the console think so, and what is the safe next step?',
+      who: 'on call and payments operations, who need sentences rather than charts.',
+      points: ['Findings ranked by urgency, each with the plain SQL rule that raised it.',
+               'Tells a poison message from a retry storm, and a data fault from a dependency outage.',
+               'Item search by id, payment reference or file, and an incident timeline ready for the ticket.'] }
+  ];
+
+  U.$('#concepts').innerHTML = CONCEPTS.map(function (c) {
+    return '<a class="card concept" href="' + c.href + '">' +
+      '<div class="thumb"><img class="t-light" src="assets/thumb-' + c.id + '-light.jpg" alt="" width="960" height="600" loading="lazy">' +
+      '<img class="t-dark" src="assets/thumb-' + c.id + '-dark.jpg" alt="" width="960" height="600" loading="lazy"></div>' +
+      '<div class="c-body"><span class="c-tag">' + esc(c.tag) + '</span><h2 class="c-name">' + esc(c.name) + '</h2>' +
+      '<p class="c-q">' + esc(c.q) + '</p>' +
+      '<p class="c-for"><b>For</b> ' + esc(c.who) + '</p>' +
+      '<ul class="c-list">' + c.points.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>' +
+      '<span class="c-open">Open ' + esc(c.name.toLowerCase()) + U.ICON.arrow + '</span></div></a>';
+  }).join('');
+
+  U.$('#story').innerHTML = D.CHAPTERS.map(function (ch) {
+    var t = D.clock(ch.m);
+    return '<div class="moment"><span class="m-time">' + t + '</span>' +
+      '<div><div class="m-label">' + esc(ch.label) + '</div><div class="m-blurb">' + esc(ch.blurb) + '</div></div>' +
+      '<div class="m-links">' + CONCEPTS.map(function (c) {
+        return '<a href="' + c.href + '#t=' + encodeURIComponent(t) + '" aria-label="' + esc(c.name + ' at ' + t) + '">' + esc(c.name) + '</a>';
+      }).join('') + '</div></div>';
+  }).join('');
+
+  var top = document.createElement('header');
+  top.className = 'topbar';
+  top.innerHTML =
+    '<a class="brand" href="index.html" aria-label="DBQ Console concepts home"><span class="brand-mark">' + U.ICON.brand + '</span>' +
+    '<span><span class="brand-name">DBQ Console</span> <span class="brand-sub">· Concepts</span></span></a>' +
+    '<nav class="concept-nav" aria-label="Concepts">' + CONCEPTS.map(function (c) {
+      return '<a href="' + c.href + '"><span class="lbl-long">' + esc(c.name) + '</span></a>';
+    }).join('') + '</nav>' +
+    '<div class="top-actions"><span class="demo-chip" title="Every name, number and file here is invented">Sample data</span>' +
+    '<button class="icon-btn" type="button" id="themeBtn" aria-label="Toggle light or dark theme">' + U.ICON.sun + U.ICON.moon + '</button></div>';
+  document.body.insertBefore(top, document.body.firstChild);
+  if (matchMedia('(max-width: 560px)').matches) {
+    U.$$('.concept-nav a', top).forEach(function (a, i) { a.querySelector('.lbl-long').textContent = ['Console', 'Flow', 'Triage'][i]; });
+  }
+  U.$('#themeBtn').addEventListener('click', function () {
+    var root = document.documentElement;
+    var dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.theme = dark ? 'light' : 'dark';
+    try { localStorage.setItem('dbq-theme', root.dataset.theme); } catch (e) { /* storage unavailable */ }
+  });
+})();
+</script>
+</body>
+</html>

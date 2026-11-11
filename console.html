@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DBQ Control Room</title>
+<script>try { var t = localStorage.getItem('dbq-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<link rel="stylesheet" href="assets/dbq.css">
+<style>
+  .kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+  .kpi { padding: 12px 14px 10px; display: flex; flex-direction: column; gap: 2px; min-height: 104px; }
+  .kpi-l { font-size: 12px; color: var(--ink-3); font-weight: 560; display: flex; align-items: center; gap: 6px; }
+  .kpi-l svg { width: 14px; height: 14px; }
+  .kpi-v { font-size: 26px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; white-space: nowrap; }
+  .kpi-v small { font-size: 13px; font-weight: 560; color: var(--ink-3); letter-spacing: 0; margin-left: 2px; }
+  .kpi-s { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi .spark { margin-top: auto; width: 100%; }
+  .kpi.alert { box-shadow: 0 0 0 1px var(--line), inset 3px 0 0 var(--critical); }
+  .kpi.alert-s { box-shadow: 0 0 0 1px var(--line), inset 3px 0 0 var(--serious); }
+
+  .qname { font-weight: 620; font-family: var(--mono); font-size: 12.5px; letter-spacing: -0.01em; }
+  .qblurb { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 230px; }
+  .agecell { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; min-width: 92px; }
+  .agecell .meter { width: 84px; height: 4px; }
+  .cons { display: inline-flex; gap: 3px; align-items: center; }
+  .cons i { width: 7px; height: 14px; border-radius: 2px; background: var(--good); display: inline-block; }
+  .cons i.off { background: var(--serious); }
+  .zero { color: var(--ink-3); opacity: 0.6; }
+  td.sev-critical, td.sev-serious { font-weight: 640; }
+
+  .qcards { display: none; }
+  .detail { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
+  .detail-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 26px 0 12px; }
+  .detail-head h2 { font-size: 18px; font-family: var(--mono); font-weight: 650; letter-spacing: -0.02em; }
+  .detail-head .facts { display: flex; gap: 14px; color: var(--ink-3); font-size: 12.5px; flex-wrap: wrap; }
+  .detail-head .facts b { color: var(--ink); font-weight: 600; }
+  .detail-head .spacer { flex: 1; }
+  .charts { display: grid; gap: 16px; }
+  .chart-card .card-b { padding-top: 6px; }
+  .chart-note { font-size: 12px; color: var(--ink-2); padding: 0 16px 14px; margin-top: -4px; }
+  .chart-note b { font-weight: 640; }
+  .side { display: grid; gap: 16px; }
+
+  .wk { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 10px 16px; border-top: 1px solid var(--line-2); align-items: center; }
+  .wk:first-child { border-top: 0; }
+  .wk-id { font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
+  .wk-meta { font-size: 12px; color: var(--ink-3); display: flex; gap: 10px; flex-wrap: wrap; }
+  .wk-meta b { color: var(--ink-2); font-weight: 600; }
+  .wk.stale { background: var(--serious-wash); }
+  .wk-act { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+  .hb { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; }
+  .hb svg { width: 14px; height: 14px; }
+  .hb.ok svg { color: var(--good); }
+  .hb.bad svg { color: var(--serious); }
+
+  .fp { padding: 10px 16px; border-top: 1px solid var(--line-2); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; }
+  .fp:first-child { border-top: 0; }
+  .fp-key { font-family: var(--mono); font-size: 11.5px; line-height: 1.45; overflow-wrap: anywhere; }
+  .fp-meta { font-size: 12px; color: var(--ink-3); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .kind { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--surface-3); color: var(--ink-2); }
+  .empty { padding: 18px 16px 20px; color: var(--ink-3); font-size: 13px; }
+
+  .items { margin-top: 16px; }
+  .tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; padding: 0 12px; border-bottom: 1px solid var(--line); }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { border: 0; background: transparent; padding: 10px 10px 9px; font-size: 13px; font-weight: 560; color: var(--ink-3); cursor: pointer; white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; gap: 6px; align-items: center; }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+  .tabs .cnt { font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 999px; background: var(--surface-3); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .tabs .cnt.serious { background: var(--serious-wash); color: var(--serious-ink); }
+  .tabs .cnt.critical { background: var(--critical-wash); color: var(--critical-ink); }
+  .err { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); max-width: 340px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .items-foot { display: flex; align-items: center; gap: 10px; padding: 10px 16px 12px; border-top: 1px solid var(--line-2); font-size: 12px; color: var(--ink-3); flex-wrap: wrap; }
+  .items-foot .spacer { flex: 1; }
+
+
+  @media (max-width: 1280px) {
+    .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .col-wide { display: none; }
+  }
+  @media (max-width: 1060px) {
+    .detail { grid-template-columns: minmax(0, 1fr); }
+    .side { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  }
+  @media (max-width: 860px) {
+    .col-mid { display: none; }
+  }
+  @media (max-width: 760px) {
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .kpi { min-height: 96px; padding: 10px 12px 8px; }
+    .kpi-v { font-size: 22px; }
+    .qtable { display: none; }
+    .qcards { display: grid; gap: 8px; margin-top: 12px; }
+    .side { grid-template-columns: minmax(0, 1fr); }
+    .col-narrow-hide { display: none; }
+    .kpi-s { white-space: normal; }
+    #itable td .mono { white-space: nowrap; }
+    .err { max-width: 150px; }
+  }
+  .qcard { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; padding: 12px 14px; cursor: pointer; border: 0; text-align: left; width: 100%; font: inherit; color: inherit; }
+  .qcard[aria-selected="true"] { box-shadow: 0 0 0 2px var(--accent); }
+  .qcard .row2 { grid-column: 1 / -1; display: flex; gap: 4px 14px; font-size: 12px; color: var(--ink-3); flex-wrap: wrap; }
+  .qcard .row2 b { color: var(--ink); font-weight: 620; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<main class="page" id="main">
+  <section class="kpis" id="kpis" aria-label="Headline numbers"></section>
+
+  <section class="card qtable" style="margin-top:16px" aria-label="Queues">
+    <div class="card-h"><h2 class="card-t">Queues</h2><span class="card-sub" id="qsub"></span><span class="spacer"></span>
+      <span class="card-sub">Rates are per minute, last 5 minutes</span></div>
+    <div class="table-wrap" style="padding:4px 6px 6px"><table class="t" id="qt">
+      <thead><tr>
+        <th>Queue</th><th>Health</th><th class="r">Waiting</th><th class="r">Oldest wait</th>
+        <th class="r">In</th><th class="r">Out</th><th class="r col-wide">Failing</th>
+        <th class="r col-mid">In flight</th><th class="r">Stuck</th><th class="r col-mid">Dead</th><th class="col-wide">Consumers</th><th class="col-mid">Oldest wait, 60 min</th>
+      </tr></thead><tbody></tbody></table></div>
+  </section>
+  <section class="qcards" id="qcards" aria-label="Queues"></section>
+
+  <div class="detail-head" id="dhead"></div>
+  <div class="detail">
+    <div class="charts">
+      <div class="card chart-card">
+        <div class="card-h"><h3 class="card-t">Oldest waiting item</h3><span class="card-sub">age of the item that has waited longest, against the queue's target</span><span class="spacer"></span>
+          <div class="seg" id="win" role="group" aria-label="Chart window">
+            <button type="button" data-w="60">1h</button><button type="button" data-w="180" aria-pressed="true">3h</button><button type="button" data-w="day">Day</button>
+          </div></div>
+        <div class="card-b"><div id="chAge"></div></div>
+        <div class="chart-note" id="ageNote"></div>
+      </div>
+      <div class="card chart-card">
+        <div class="card-h"><h3 class="card-t">Items by state</h3><span class="spacer"></span>
+          <div class="legend"><span><i style="background:var(--s1)"></i>Waiting</span><span><i style="background:var(--s3)"></i>In flight</span><span><i style="background:var(--s7)"></i>Retry scheduled</span></div></div>
+        <div class="card-b"><div id="chDepth"></div></div>
+      </div>
+      <div class="card chart-card">
+        <div class="card-h"><h3 class="card-t">Throughput</h3><span class="card-sub">items per minute</span><span class="spacer"></span>
+          <div class="legend"><span><i class="line" style="background:var(--s1)"></i>Arrived</span><span><i class="line" style="background:var(--s3)"></i>Completed</span><span><i class="line" style="background:var(--critical)"></i>Failed</span></div></div>
+        <div class="card-b"><div id="chTput"></div></div>
+      </div>
+    </div>
+    <div class="side">
+      <div class="card"><div class="card-h"><h3 class="card-t">Consumers</h3><span class="card-sub" id="wsub"></span></div>
+        <div id="workers" style="padding:6px 0 4px"></div></div>
+      <div class="card"><div class="card-h"><h3 class="card-t">Errors, last 60 min</h3><span class="card-sub">grouped by fingerprint</span></div>
+        <div id="errors" style="padding:6px 0 4px"></div></div>
+    </div>
+  </div>
+
+  <section class="card items" aria-label="Items">
+    <div class="card-h"><h3 class="card-t">Items</h3><span class="card-sub" id="isub"></span></div>
+    <div class="tabs" role="tablist" id="itabs"></div>
+    <div class="table-wrap"><table class="t" id="itable"><thead></thead><tbody></tbody></table></div>
+    <div class="items-foot"><span id="ifoot"></span></div>
+  </section>
+  <p class="footnote" style="margin-top:20px">Concept A of three. A dense, always-open console for whoever is on support today: every queue on one screen, then one queue in depth, then individual items with safe actions. Inspired by the RabbitMQ management UI, Oban Web and Sidekiq Web. Actions are simulated; nothing here writes anywhere.</p>
+</main>
+
+<script src="assets/sim.js"></script>
+<script src="assets/ui.js"></script>
+<script>
+(function () {
+  'use strict';
+  var D = window.DBQ, U = window.DBQUI, esc = U.esc, $ = U.$, $$ = U.$$;
+  U.mountChrome({ page: 'console', subtitle: 'Concept A · Control room' });
+
+  var sel = U.parseHash().q && D.QI[U.parseHash().q] != null ? U.parseHash().q : 'payments.inbound';
+  var win = 180, itemTab = null;
+
+  function sevOf(name, m) { return D.healthOf(name, m); }
+
+  /* ---------- KPIs ---------- */
+  function series(fn, m, n) { var a = []; for (var i = Math.max(0, m - n + 1); i <= m; i++) a.push(fn(i)); return a; }
+  function totalAt(key, i) { var t = 0; D.QUEUES.forEach(function (q) { t += D.S[q.name][key][i]; }); return t; }
+  function rate5(key, i) { return totalAt5(key, i) / 5; }
+  function totalAt5(key, i) { var t = 0; D.QUEUES.forEach(function (q) { t += D.sum(D.S[q.name][key], i - 4, i); }); return t; }
+  function worstAt(i) {
+    var best = null;
+    D.QUEUES.forEach(function (q) { var r = D.S[q.name].oldest[i] / q.slo; if (!best || r > best.r) best = { q: q, r: r, age: D.S[q.name].oldest[i] }; });
+    return best;
+  }
+  function renderKpis(m) {
+    var waiting = totalAt('waiting', m), waiting15 = totalAt('waiting', Math.max(0, m - 15));
+    var w = worstAt(m);
+    var out = rate5('done', m), inn = rate5('arr', m), fail = rate5('fail', m);
+    var stuck = totalAt('stuck', m), dead = totalAt('dead', m), deadNew = dead - totalAt('dead', 0);
+    var silent = D.WORKERS[D.STUCK.worker].hb[m] > 90 ? 1 : 0;
+    var dW = waiting - waiting15;
+    var tiles = [
+      { l: 'Waiting', v: D.fmtNum(waiting), s: (dW === 0 ? 'flat' : (dW > 0 ? '+' : '−') + D.fmtNum(Math.abs(dW))) + ' vs 15 min ago', sp: series(function (i) { return totalAt('waiting', i); }, m, 60), c: 'var(--s1)' },
+      { l: 'Worst wait', v: D.fmtDur(w.age), s: w.q.name + ' · target ' + D.fmtDur(w.q.slo), sp: series(function (i) { return D.S[w.q.name].oldest[i]; }, m, 60), c: w.r >= 1 ? 'var(--critical)' : 'var(--s1)', th: w.q.slo, alert: w.r >= 1 ? 'alert' : '' },
+      { l: 'Completed', v: U.rate(out), unit: '/min', s: U.rate(inn) + '/min arriving', sp: series(function (i) { return rate5('done', i); }, m, 60), c: 'var(--s3)' },
+      { l: 'Failing', v: U.rate(fail), unit: '/min', s: fail > 50 ? 'mostly one error: see Triage' : 'attempts that threw', sp: series(function (i) { return rate5('fail', i); }, m, 60), c: 'var(--critical)', alert: fail > 50 ? 'alert' : '' },
+      { l: 'Stuck claims', v: D.fmtNum(stuck), s: silent ? silent + ' consumer silent for ' + D.fmtDur(D.WORKERS[D.STUCK.worker].hb[m]) : 'all heartbeats fresh', sp: series(function (i) { return totalAt('stuck', i); }, m, 60), c: 'var(--serious)', alert: stuck ? 'alert-s' : '' },
+      { l: 'Dead letters', v: D.fmtNum(dead), s: deadNew ? '+' + D.fmtNum(deadNew) + ' today' : 'none new today', sp: series(function (i) { return totalAt('dead', i); }, m, 60), c: 'var(--ink-3)', alert: deadNew > 100 ? 'alert-s' : '' }
+    ];
+    $('#kpis').innerHTML = tiles.map(function (t) {
+      return '<div class="card kpi ' + (t.alert || '') + '"><div class="kpi-l">' + esc(t.l) + '</div>' +
+        '<div class="kpi-v">' + esc(t.v) + (t.unit ? '<small>' + t.unit + '</small>' : '') + '</div>' +
+        '<div class="kpi-s" title="' + esc(t.s) + '">' + esc(t.s) + '</div>' +
+        U.spark(t.sp, { w: 180, h: 24, color: t.c, threshold: t.th }).replace('width="180"', 'width="100%" preserveAspectRatio="none"') + '</div>';
+    }).join('');
+  }
+
+  /* ---------- queue table ---------- */
+  function ageMeter(v) {
+    var r = Math.min(1, v.oldest / v.q.slo);
+    var col = v.oldest >= v.q.slo ? 'var(--critical)' : r >= 0.66 ? 'var(--warning)' : 'var(--s1)';
+    return '<div class="meter" title="' + Math.round(v.oldest / v.q.slo * 100) + '% of target"><i style="width:' + Math.max(2, r * 100) + '%;background:' + col + '"></i></div>';
+  }
+  function n0(v, cls) { return v ? '<span class="' + (cls || '') + '">' + D.fmtNum(v) + '</span>' : '<span class="zero">0</span>'; }
+  function renderQueues(m) {
+    var rows = D.QUEUES.map(function (q) { return { v: D.queueAt(q.name, m), sev: sevOf(q.name, m) }; });
+    rows.sort(function (a, b) { return U.rankSev(a.sev) - U.rankSev(b.sev) || b.v.sloRatio - a.v.sloRatio; });
+    var bad = rows.filter(function (r) { return r.sev !== 'good'; }).length;
+    $('#qsub').textContent = rows.length + ' queues · ' + (bad ? bad + ' need attention' : 'all healthy');
+    $('#qt tbody').innerHTML = rows.map(function (r) {
+      var v = r.v, q = v.q, s = D.S[q.name];
+      var trend = []; for (var i = Math.max(0, m - 59); i <= m; i++) trend.push(s.oldest[i]);
+      var cons = ''; for (var k = 0; k < v.total; k++) cons += '<i class="' + (k < v.live ? '' : 'off') + '"></i>';
+      return '<tr class="clickable" data-q="' + q.name + '" aria-selected="' + (q.name === sel) + '" tabindex="0">' +
+        '<td><div class="qname">' + esc(q.name) + '</div><div class="qblurb">' + esc(q.producer + ' → ' + q.consumer + ' · ' + q.blurb) + '</div></td>' +
+        '<td>' + U.status(r.sev) + '</td>' +
+        '<td class="r">' + n0(v.waiting) + '</td>' +
+        '<td class="r"><div class="agecell"><span class="num' + (v.oldest >= q.slo ? ' sev-critical' : '') + '">' + (v.oldest ? D.fmtDur(v.oldest) : '<span class="zero">none</span>') + '</span>' + ageMeter(v) + '</div></td>' +
+        '<td class="r">' + U.rate(v.in5) + '</td><td class="r">' + U.rate(v.out5) + '</td>' +
+        '<td class="r col-wide">' + (v.fail5 >= 0.5 ? U.rate(v.fail5) : '<span class="zero">0</span>') + '</td>' +
+        '<td class="r col-mid">' + n0(v.inflight) + '</td>' +
+        '<td class="r">' + n0(v.stuck, 'sev-serious') + '</td>' +
+        '<td class="r col-mid">' + n0(v.dead) + '</td>' +
+        '<td class="col-wide"><span class="cons" title="' + v.live + ' of ' + v.total + ' consumers heartbeating">' + cons + '</span> <span class="muted num" style="font-size:12px">' + v.live + '/' + v.total + '</span></td>' +
+        '<td class="col-mid">' + U.spark(trend, { w: 110, h: 24, color: v.oldest >= q.slo ? 'var(--critical)' : 'var(--s1)', threshold: q.slo }) + '</td></tr>';
+    }).join('');
+    $('#qcards').innerHTML = rows.map(function (r) {
+      var v = r.v, q = v.q;
+      return '<button type="button" class="card qcard" data-q="' + q.name + '" aria-selected="' + (q.name === sel) + '">' +
+        '<div><div class="qname">' + esc(q.name) + '</div><div class="qblurb">' + esc(q.producer + ' → ' + q.consumer) + '</div></div>' +
+        '<div>' + U.status(r.sev) + '</div>' +
+        '<div class="row2"><span>Waiting <b>' + D.fmtNum(v.waiting) + '</b></span><span>Oldest <b>' + (v.oldest ? D.fmtDur(v.oldest) : 'none') + '</b></span>' +
+        '<span>Out <b>' + U.rate(v.out5) + '/min</b></span>' + (v.stuck ? '<span>Stuck <b>' + v.stuck + '</b></span>' : '') + (v.dead ? '<span>Dead <b>' + D.fmtNum(v.dead) + '</b></span>' : '') + '</div></button>';
+    }).join('');
+    $$('#qt tbody tr, #qcards .qcard').forEach(function (tr) {
+      tr.addEventListener('click', function () { select(tr.dataset.q, true); });
+      tr.addEventListener('keydown', function (e) { if (e.key === 'Enter') select(tr.dataset.q, true); });
+    });
+  }
+  function select(name, scroll) {
+    sel = name; itemTab = null; U.writeHash({ q: name });
+    render(U.now());
+    if (scroll) $('#dhead').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /* ---------- detail ---------- */
+  function renderHead(m) {
+    var v = D.queueAt(sel, m), q = v.q, sev = sevOf(sel, m);
+    $('#dhead').innerHTML = '<h2>' + esc(q.name) + '</h2>' + U.badge(sev) +
+      '<div class="facts"><span>Producer <b>' + esc(q.producer) + '</b></span><span>Consumer <b>' + esc(q.consumer) + '</b></span>' +
+      '<span>Wait target <b>' + D.fmtDur(q.slo) + '</b></span><span>Stale after <b>' + q.stale + 's</b> without heartbeat</span><span>Max attempts <b>' + q.maxAttempts + '</b></span></div>' +
+      '<span class="spacer"></span><button class="btn sm" type="button" id="pauseBtn">Pause consuming…</button>';
+    $('#pauseBtn').addEventListener('click', function () { confirmAction('pause', { queue: q.name }); });
+  }
+  function windowRange(m) {
+    var from = win === 'day' ? 0 : Math.max(0, m - win);
+    return { from: from, to: Math.max(m, from + 10) };
+  }
+  function markersIn(from, to) {
+    return D.EVENTS.filter(function (e) { return e.m >= from && e.m <= to && (e.queue === sel || e.kind === 'stuck' && D.STUCK.claims[sel]) && e.kind !== 'breach' && e.kind !== 'recover'; })
+      .map(function (e) { return { m: e.m, label: shortEvent(e) }; });
+  }
+  function shortEvent(e) {
+    return { poison: 'poison item', stuck: 'mmp-app-03 silent', spike: e.m === D.BULK.from ? '48K-row file' : 'BACS file', storm: 'cbs-gateway timeouts' }[e.kind] || '';
+  }
+  function renderCharts(m) {
+    var q = D.QUEUES[D.QI[sel]], s = D.S[sel], r = windowRange(m);
+    var to = Math.min(m, r.to);
+    var markers = markersIn(r.from, to);
+    var breachFrom = null; for (var i = to; i >= r.from && s.oldest[i] >= q.slo; i--) breachFrom = i;
+    U.chart($('#chAge'), { height: 190, from: r.from, to: to, label: 'Oldest waiting item age',
+      series: [{ label: 'oldest waiting', color: 'var(--s1)', values: s.oldest, kind: 'area' }],
+      threshold: { value: q.slo, label: 'target ' + D.fmtDur(q.slo) }, yFmt: function (v) { return v ? D.fmtDur(v) : '0'; }, durationAxis: true,
+      markers: markers, band: breachFrom != null ? { from: breachFrom, to: to } : null });
+    var v = D.queueAt(sel, m);
+    var note = '';
+    var ageThen = s.oldest[Math.max(0, m - 10)], wThen = s.waiting[Math.max(0, m - 10)];
+    if (v.oldest >= q.slo && v.waiting < wThen && v.oldest > ageThen) note = '<b>The count is falling but the oldest item is still getting older.</b> The queue is draining slower than the burst arrived, so the target stays breached until about ' + D.clock(Math.min(D.N - 1, m + (v.etaMin || 0))) + '. A count-only graph would already look like recovery.';
+    else if (v.oldest >= q.slo) note = '<b>Breaching for ' + D.fmtDur((to - (breachFrom || to)) * 60) + '.</b> ' + (v.etaMin ? 'At the current drain rate the backlog clears in about ' + v.etaMin + ' min (' + D.clock(Math.min(D.N - 1, m + v.etaMin)) + ').' : 'The backlog is not shrinking yet.');
+    else if (v.stuck) note = '<b>' + v.stuck + ' items are claimed by a consumer that stopped heartbeating.</b> They are not counted as waiting, so this chart cannot show them. See Consumers.';
+    else note = 'Lag is measured as age, not count: ' + D.fmtNum(v.waiting) + ' waiting items are fine if the oldest is seconds old.';
+    $('#ageNote').innerHTML = note;
+    U.chart($('#chDepth'), { height: 170, from: r.from, to: to, stack: true, label: 'Items by state',
+      series: [{ label: 'Waiting', color: 'var(--s1)', values: s.waiting }, { label: 'In flight', color: 'var(--s3)', values: s.inflight }, { label: 'Retry scheduled', color: 'var(--s7)', values: s.sched }],
+      tipFmt: function (x) { return D.fmtNum(x); }, markers: markers });
+    U.chart($('#chTput'), { height: 170, from: r.from, to: to, label: 'Throughput per minute',
+      series: [{ label: 'Arrived', color: 'var(--s1)', values: s.arr }, { label: 'Completed', color: 'var(--s3)', values: s.done }, { label: 'Failed', color: 'var(--critical)', values: s.fail, sparse: true }],
+      tipFmt: function (x) { return D.fmtNum(x) + '/min'; }, markers: markers, endDot: false });
+  }
+  function renderWorkers(m) {
+    var q = D.QUEUES[D.QI[sel]], s = D.S[sel];
+    var live = q.workers.filter(function (w) { return D.WORKERS[w].hb[m] <= q.stale; }).length;
+    $('#wsub').textContent = live + ' of ' + q.workers.length + ' heartbeating · stale after ' + q.stale + 's';
+    $('#workers').innerHTML = q.workers.map(function (id) {
+      var w = D.WORKERS[id], hb = w.hb[m], stale = hb > q.stale;
+      var done5 = D.sum(s.workerDone[id] || [], m - 4, m) / 5;
+      var claims = stale ? (D.STUCK.claims[sel] || 0) : Math.round(s.inflight[m] / Math.max(1, s.live[m]));
+      var trend = []; for (var i = Math.max(0, m - 59); i <= m; i++) trend.push((s.workerDone[id] || [])[i] || 0);
+      return '<div class="wk' + (stale ? ' stale' : '') + '"><div><div class="wk-id">' + esc(id) + '<span class="muted" style="font-weight:400">:' + w.pid + '</span></div>' +
+        '<div class="wk-meta"><span class="hb ' + (stale ? 'bad' : 'ok') + '">' + U.ICON.heart + (stale ? 'last heartbeat ' + D.clock(D.STUCK.min, D.STUCK.sec) + ', <b>' + D.fmtDur(hb) + ' ago</b>' : 'heartbeat ' + hb + 's ago') + '</span>' +
+        '<span>holding <b>' + claims + '</b></span><span><b>' + U.rate(done5) + '</b>/min done</span></div></div>' +
+        '<div>' + U.spark(trend, { w: 80, h: 24, color: stale ? 'var(--serious)' : 'var(--s3)' }) + '</div>' +
+        (stale ? '<div class="wk-act">' + U.badge('serious', 'Stuck: claims will never complete') + '<button type="button" class="btn sm" data-release="' + id + '">Release ' + claims + ' claims…</button></div>' : '') + '</div>';
+    }).join('');
+    $$('[data-release]').forEach(function (b) { b.addEventListener('click', function () { confirmAction('release', { worker: b.dataset.release, queue: sel }); }); });
+  }
+  function renderErrors(m) {
+    var s = D.S[sel];
+    var groups = Object.keys(s.failFp).map(function (k) {
+      var n = D.sum(s.failFp[k], m - 59, m);
+      var last = -1; for (var i = m; i >= 0; i--) if (s.failFp[k][i]) { last = i; break; }
+      var trend = []; for (i = Math.max(0, m - 59); i <= m; i++) trend.push(s.failFp[k][i]);
+      return { k: k, n: n, last: last, trend: trend };
+    }).filter(function (g) { return g.n > 0; }).sort(function (a, b) { return b.n - a.n; });
+    if (!groups.length) { $('#errors').innerHTML = '<div class="empty">No failed attempts in the last hour.</div>'; return; }
+    var kindLabel = { deterministic: 'same item fails every time', transient: 'succeeds on retry', dependency: 'downstream dependency' };
+    $('#errors').innerHTML = groups.map(function (g) {
+      var fp = D.FP[g.k];
+      return '<div class="fp"><div><div class="fp-key">' + esc(fp.key) + '</div><div class="fp-meta"><span class="kind">' + esc(kindLabel[fp.kind]) + '</span><span><b class="num" style="color:var(--ink)">' + D.fmtNum(g.n) + '</b> failed attempt' + (g.n === 1 ? '' : 's') + '</span><span>last ' + D.clock(g.last) + '</span></div></div>' +
+        '<div>' + U.spark(g.trend, { w: 72, h: 22, color: 'var(--critical)' }) + '</div></div>';
+    }).join('');
+  }
+
+  /* ---------- items ---------- */
+  function itemsFor(qname, tab, m) {
+    var s = D.S[qname], nowS = m * 60 + 59, rows = [];
+    var batches = D.batchesOf(qname);
+    if (tab === 'waiting') {
+      var age = s.oldest[m], n = Math.min(8, s.waiting[m]);
+      var bulk = D.batches[D.BULK.name], done = bulk ? D.sum(bulk.done, 0, m) : 0;
+      for (var i = 0; i < n; i++) {
+        var a = Math.max(1, age - i * (age > 600 ? 1 : 0.4));
+        var inBulk = qname === 'payments.inbound' && m >= D.BULK.from && done < bulk.total && age > 300;
+        rows.push({ id: (qname === 'payments.inbound' ? 88140000 : qname === 'ledger.postings' ? 55100000 : 31000000) + m * 37 + i * 3 + (inBulk ? done : 0),
+          ref: inBulk ? 'PAY-DEMO-BULK-' + (done + 26 + i) : refFor(qname, m, i), batch: inBulk ? D.BULK.name : (batches[0] || {}).name || '-', att: 0, ageS: a,
+          created: nowS - a, worker: '', err: '' });
+      }
+    } else if (tab === 'stuck') {
+      var k = s.stuck[m];
+      for (i = 0; i < Math.min(k, 8); i++) rows.push({ id: (qname === 'payments.inbound' ? 88131865 : 31227702) + i * 2 + (i > 5 ? 3 : 0),
+        ref: qname === 'payments.inbound' ? 'PAY-DEMO-1030-0' + (400 + i * 2) : 'DDI-DEMO-1030-' + (88 + i), batch: qname === 'payments.inbound' ? 'DEMO_FPS_20261015_1030.csv' : 'DDI stream',
+        att: 1, worker: D.STUCK.worker + ':' + D.STUCK.pid, claimed: D.STUCK.min * 60 - 15 + i * 2, hb: D.STUCK.min * 60 + D.STUCK.sec, ageS: nowS - (D.STUCK.min * 60 - 15 + i * 2) });
+    } else if (tab === 'inflight') {
+      var live = D.QUEUES[D.QI[qname]].workers.filter(function (w) { return D.WORKERS[w].hb[m] <= 90; });
+      for (i = 0; i < Math.min(s.inflight[m], 8); i++) rows.push({ id: 88150000 + m * 41 + i, ref: refFor(qname, m, i + 20), batch: (batches[0] || {}).name || '-',
+        att: 1, worker: live[i % live.length] + ':' + D.WORKERS[live[i % live.length]].pid, claimed: nowS - (i % 4) - 1, hb: nowS - (i % 3), ageS: (i % 4) + 1 });
+    } else if (tab === 'sched') {
+      var pa = D.poisonAttempts.filter(function (x) { return x.at <= nowS; });
+      if (qname === 'payments.inbound' && pa.length && nowS < D.POISON_DEAD_S) {
+        var nxt = D.poisonAttempts[pa.length] || {};
+        rows.push({ id: D.POISON.id, ref: D.POISON.ref, batch: D.POISON.batch, att: pa.length, next: nxt.at, err: D.POISON.error, poison: true });
+      }
+      var extra = Math.min(8 - rows.length, s.sched[m] - rows.length);
+      for (i = 0; i < extra; i++) rows.push({ id: 55102399 + i * 7, ref: qname === 'ledger.postings' ? 'POST-DEMO-' + (55102399 + i * 7) : refFor(qname, m, i + 40),
+        batch: qname === 'ledger.postings' ? 'from payments.inbound' : '-', att: 1 + (i % 4), next: nowS + 15 + i * 9, err: qname === 'ledger.postings' ? D.FP.cbs.sample : D.FP.optlock.sample });
+    } else if (tab === 'dead') {
+      if (qname === 'payments.inbound' && nowS >= D.POISON_DEAD_S) rows.push({ id: D.POISON.id, ref: D.POISON.ref, batch: D.POISON.batch, att: 10, died: D.POISON_DEAD_S, err: D.POISON.error, poison: true });
+      var fpk = qname === 'ledger.postings' ? 'cbs' : qname === 'notify.outbound' ? 'smtp' : qname === 'mandates.inbound' ? 'mandate' : null;
+      for (i = 0; i < Math.min(8 - rows.length, s.dead[m] - rows.length) && fpk; i++) rows.push({ id: (qname === 'ledger.postings' ? 55101200 : 70220000) + i * 5, ref: qname === 'ledger.postings' ? 'POST-DEMO-' + (55101200 + i * 5) : qname === 'notify.outbound' ? 'NTF-DEMO-' + (90310 + i * 13) : 'DDI-DEMO-55120',
+        batch: '-', att: D.QUEUES[D.QI[qname]].maxAttempts, died: qname === 'ledger.postings' ? (D.STORM.from + 8) * 60 + i * 11 : (60 + i * 47) * 60 % (m * 60 || 1), err: D.FP[fpk].sample });
+    }
+    return rows;
+  }
+  function refFor(qname, m, i) {
+    var p = { 'payments.inbound': 'PAY-DEMO-', 'mandates.inbound': 'DDI-DEMO-', 'ledger.postings': 'POST-DEMO-', 'notify.outbound': 'NTF-DEMO-', 'recon.daily': 'REC-DEMO-', 'audit.archive': 'AUD-DEMO-' }[qname];
+    return p + (1000 + ((m * 53 + i * 17) % 9000));
+  }
+  function renderItems(m) {
+    var s = D.S[sel];
+    var tabs = [
+      { id: 'waiting', l: 'Waiting', n: s.waiting[m] }, { id: 'inflight', l: 'In flight', n: s.inflight[m] },
+      { id: 'stuck', l: 'Stuck', n: s.stuck[m], c: s.stuck[m] ? 'serious' : '' }, { id: 'sched', l: 'Retry scheduled', n: s.sched[m] },
+      { id: 'dead', l: 'Dead', n: s.dead[m], c: s.dead[m] ? 'critical' : '' }
+    ];
+    if (!itemTab) itemTab = s.stuck[m] ? 'stuck' : s.waiting[m] > 100 ? 'waiting' : s.dead[m] ? 'dead' : 'waiting';
+    $('#itabs').innerHTML = tabs.map(function (t) {
+      return '<button type="button" role="tab" data-tab="' + t.id + '" aria-selected="' + (t.id === itemTab) + '">' + esc(t.l) + ' <span class="cnt ' + (t.c || '') + '">' + U.compact(t.n) + '</span></button>';
+    }).join('');
+    $$('#itabs button').forEach(function (b) { b.addEventListener('click', function () { itemTab = b.dataset.tab; renderItems(U.now()); }); });
+    $('#isub').textContent = sel;
+    var rows = itemsFor(sel, itemTab, m), nowS = m * 60 + 59;
+    var cols = {
+      waiting: ['Id', 'Business ref', 'Source file', 'Waiting for', 'Attempts'],
+      inflight: ['Id', 'Business ref', 'Claimed by', 'Heartbeat', 'Running for'],
+      stuck: ['Id', 'Business ref', 'Claimed by', 'Claimed at', 'Last heartbeat', 'Stuck for'],
+      sched: ['Id', 'Business ref', 'Attempts', 'Next attempt', 'Last error'],
+      dead: ['Id', 'Business ref', 'Attempts', 'Died at', 'Last error']
+    }[itemTab];
+    var right = { 'Waiting for': 1, 'Attempts': 1, 'Running for': 1, 'Stuck for': 1, 'Heartbeat': 1 };
+    var narrowHide = { 'Source file': 1, 'Claimed at': 1, 'Business ref': 1, 'Heartbeat': 1, 'Last heartbeat': 1 };
+    $('#itable thead').innerHTML = '<tr>' + cols.map(function (c) { return '<th class="' + (right[c] ? 'r ' : '') + (narrowHide[c] ? 'col-narrow-hide' : '') + '">' + c + '</th>'; }).join('') + '</tr>';
+    if (!rows.length) { $('#itable tbody').innerHTML = '<tr><td colspan="' + cols.length + '"><div class="empty" style="padding:8px 0">Nothing in this state right now.</div></td></tr>'; }
+    else $('#itable tbody').innerHTML = rows.map(function (r, i) {
+      var cells = { 'Id': '<span class="mono">#' + r.id + '</span>', 'Business ref': '<span class="mono">' + esc(r.ref) + '</span>', 'Source file': '<span class="mono muted" style="font-size:11.5px">' + esc(r.batch) + '</span>',
+        'Waiting for': D.fmtDur(r.ageS), 'Attempts': r.att + (r.poison ? ' ' + U.badge('warning', 'poison?') : ''), 'Claimed by': '<span class="mono">' + esc(r.worker || '') + '</span>',
+        'Heartbeat': r.hb ? D.fmtDur(nowS - r.hb) + ' ago' : '', 'Running for': D.fmtDur(r.ageS), 'Claimed at': r.claimed ? U.clockS(r.claimed) : '',
+        'Last heartbeat': r.hb ? U.clockS(r.hb) : '', 'Stuck for': '<b>' + D.fmtDur(nowS - r.hb) + '</b>', 'Next attempt': r.next ? U.clockS(r.next) : '',
+        'Last error': '<span class="err" title="' + esc(r.err || '') + '">' + esc(r.err || '') + '</span>', 'Died at': r.died ? U.clockS(r.died) : '' };
+      return '<tr class="clickable" data-i="' + i + '" tabindex="0">' + cols.map(function (c) { return '<td class="' + (right[c] ? 'r ' : '') + (narrowHide[c] ? 'col-narrow-hide' : '') + '">' + cells[c] + '</td>'; }).join('') + '</tr>';
+    }).join('');
+    $$('#itable tbody tr.clickable').forEach(function (tr) {
+      var open = function () { openItem(rows[+tr.dataset.i], itemTab); };
+      tr.addEventListener('click', open); tr.addEventListener('keydown', function (e) { if (e.key === 'Enter') open(); });
+    });
+    var total = tabs.filter(function (t) { return t.id === itemTab; })[0].n;
+    $('#ifoot').innerHTML = rows.length ? 'Showing the first ' + rows.length + ' of ' + D.fmtNum(total) + '. Select a row for its journey.' : '';
+  }
+
+  function openItem(r, tab) {
+    var m = U.now(), nowS = m * 60 + 59;
+    var steps = [];
+    var created = r.created || (r.claimed ? r.claimed - 600 : nowS - 120);
+    if (r.poison) {
+      steps.push({ c: 'ok', t: U.clockS(D.POISON.firstMin * 60 + 9), h: 'Created by AIS', d: 'row ' + D.POISON.row + ' of ' + D.POISON.batch });
+      D.poisonAttempts.forEach(function (a) { if (a.at <= nowS) steps.push({ c: 'bad', t: U.clockS(a.at), h: 'Attempt ' + a.attempt + ' failed on ' + a.worker, d: 'IllegalArgumentException: creditor IBAN checksum invalid' }); });
+      if (nowS >= D.POISON_DEAD_S) steps.push({ c: 'bad', t: U.clockS(D.POISON_DEAD_S), h: 'Moved to dead', d: 'max attempts (10) reached' });
+      else steps.push({ c: 'now', t: U.clockS(D.poisonAttempts[steps.length - 1] ? D.poisonAttempts[steps.length - 1].at : nowS), h: 'Waiting for attempt ' + steps.length, d: 'backoff in progress' });
+    } else if (tab === 'stuck') {
+      steps.push({ c: 'ok', t: U.clockS(r.claimed - 640), h: 'Created by AIS', d: r.batch });
+      steps.push({ c: 'ok', t: U.clockS(r.claimed), h: 'Claimed by ' + r.worker, d: 'attempt 1 started' });
+      steps.push({ c: 'warn', t: U.clockS(r.hb), h: 'Last heartbeat', d: 'the consumer has said nothing since' });
+      steps.push({ c: 'now', t: U.clockS(nowS), h: 'Still claimed, ' + D.fmtDur(nowS - r.hb) + ' later', d: 'no other consumer can take it until the claim is released' });
+    } else {
+      steps.push({ c: 'ok', t: U.clockS(created), h: 'Created', d: r.batch });
+      if (tab === 'inflight') steps.push({ c: 'now', t: U.clockS(r.claimed), h: 'Claimed by ' + r.worker, d: 'heartbeat fresh' });
+      else if (tab === 'dead') { steps.push({ c: 'bad', t: U.clockS(r.died - 200), h: 'Failed ' + r.att + ' times', d: r.err }); steps.push({ c: 'bad', t: U.clockS(r.died), h: 'Moved to dead', d: 'max attempts reached' }); }
+      else if (tab === 'sched') { steps.push({ c: 'bad', t: U.clockS(nowS - 20), h: 'Attempt ' + r.att + ' failed', d: r.err }); steps.push({ c: 'now', t: U.clockS(r.next), h: 'Next attempt scheduled', d: 'available_at in the future' }); }
+      else steps.push({ c: 'now', t: U.clockS(nowS), h: 'Waiting ' + D.fmtDur(r.ageS), d: 'in claim order behind ' + D.fmtNum(Math.max(0, (r.id % 50))) + ' items' });
+    }
+    var acts = tab === 'stuck' ? '<button class="btn" data-a="release-one">Release this claim…</button>'
+      : tab === 'dead' ? '<button class="btn primary" data-a="retry">Retry now…</button><button class="btn" data-a="discard">Discard…</button>'
+      : tab === 'sched' ? '<button class="btn" data-a="retry">Retry now…</button><button class="btn" data-a="dead">Move to dead…</button>'
+      : tab === 'waiting' ? '<button class="btn" data-a="cancel">Cancel…</button>' : '<span class="muted">No actions while a healthy consumer holds it.</span>';
+    U.drawer('<div class="drawer-h"><div style="flex:1;min-width:0"><div class="eyebrow">' + esc(sel) + ' · ' + esc(tab) + '</div>' +
+      '<h3 style="font-size:17px;margin-top:2px" class="mono">#' + r.id + '</h3><div class="muted mono" style="font-size:12px">' + esc(r.ref) + '</div></div>' +
+      '<button class="icon-btn" data-close aria-label="Close">' + U.ICON.close + '</button></div>' +
+      '<div class="drawer-b"><dl class="kv">' +
+      '<dt>Queue</dt><dd class="mono">' + esc(sel) + '</dd><dt>Source</dt><dd class="mono">' + esc(r.batch || '-') + '</dd>' +
+      '<dt>Attempts</dt><dd>' + r.att + ' of ' + D.QUEUES[D.QI[sel]].maxAttempts + '</dd>' +
+      (r.worker ? '<dt>claimed_by</dt><dd class="mono">' + esc(r.worker) + '</dd>' : '') +
+      (r.err ? '<dt>last_error</dt><dd class="mono" style="font-size:11.5px">' + esc(r.err) + '</dd>' : '') +
+      // wrap only after a slash so a narrow drawer never splits the file name at its hyphens
+      '<dt>payload_ref</dt><dd class="mono">' + ['s3://demo-ais-landing/', '2026-10-15/', esc(r.ref) + '.json'].map(function (p) { return '<span style="white-space:nowrap">' + p + '</span>'; }).join('<wbr>') + '</dd></dl>' +
+      '<div class="section-t">Journey</div><ol class="journey">' + steps.map(function (s) {
+        return '<li class="' + s.c + '"><div class="jt">' + s.t + '</div><div>' + esc(s.h) + '</div><div class="jd">' + esc(s.d || '') + '</div></li>';
+      }).join('') + '</ol><div class="section-t">Actions</div><div class="action-row">' + acts + '</div></div>', function (d) {
+      U.$$('[data-a]', d).forEach(function (b) { b.addEventListener('click', function () { confirmAction(b.dataset.a, { queue: sel, item: r }); }); });
+    });
+  }
+
+  /* ---------- guarded actions ---------- */
+  function confirmAction(kind, ctx) {
+    var m = U.now(), q = ctx.queue, n = 1, title, sql, explain, danger = false;
+    if (kind === 'release') {
+      n = D.STUCK.claims[q] || 0;
+      title = 'Release ' + n + ' claims held by ' + ctx.worker;
+      explain = 'Puts the items back to waiting so a healthy consumer can take them. Only rows whose heartbeat is still stale at the moment of the update are touched, so a consumer that wakes up mid-click keeps its work.';
+      sql = "UPDATE dbq_item\n   SET status = 'QUEUED', claimed_by = NULL, claimed_at = NULL,\n       heartbeat_at = NULL, available_at = NOW()\n WHERE queue_name = '" + q + "'\n   AND status IN ('CLAIMED', 'PROCESSING')\n   AND claimed_by LIKE '" + ctx.worker + ":%'\n   AND heartbeat_at < NOW() - INTERVAL '90 seconds'  -- guard: still stale\nRETURNING id;";
+    } else if (kind === 'release-one') {
+      title = 'Release claim on #' + ctx.item.id;
+      explain = 'Same guard as the bulk release, scoped to one id.';
+      sql = "UPDATE dbq_item\n   SET status = 'QUEUED', claimed_by = NULL, available_at = NOW()\n WHERE id = " + ctx.item.id + "\n   AND heartbeat_at < NOW() - INTERVAL '90 seconds'\nRETURNING id;";
+    } else if (kind === 'retry') {
+      title = 'Retry #' + ctx.item.id + ' now';
+      explain = ctx.item.poison ? 'This item failed 10 times with the same validation error. Retrying will fail again unless the data or the code changed. Consider fixing the source row first.' : 'Makes the item claimable immediately and resets attempts.';
+      sql = "UPDATE dbq_item\n   SET status = 'QUEUED', available_at = NOW(), attempts = 0\n WHERE id = " + ctx.item.id + "\n   AND status IN ('DEAD', 'FAILED', 'QUEUED')\nRETURNING id;";
+    } else if (kind === 'discard' || kind === 'cancel' || kind === 'dead') {
+      danger = true;
+      title = (kind === 'dead' ? 'Move #' : kind === 'cancel' ? 'Cancel #' : 'Discard #') + ctx.item.id;
+      explain = 'The item will never be processed. Make sure the business owner of ' + q + ' agrees; for a payment this usually means a manual repair elsewhere.';
+      sql = "UPDATE dbq_item\n   SET status = 'DEAD', last_error = 'operator: ' || :reason\n WHERE id = " + ctx.item.id + "\n   AND status <> 'DONE'\nRETURNING id;";
+    } else if (kind === 'pause') {
+      title = 'Pause consuming ' + q;
+      explain = 'Consumers stop claiming new items; claims in progress finish. Producers keep writing, so the backlog will grow. Useful when a downstream dependency is down and retries would only burn attempts.';
+      sql = "UPDATE dbq_queue_config\n   SET paused = TRUE, paused_by = :me, paused_at = NOW()\n WHERE queue_name = '" + q + "';";
+      n = D.S[q].waiting[m];
+    }
+    U.guarded({ queue: q, title: title, explain: explain, sql: sql, n: n, danger: danger,
+      nLabel: kind === 'pause' ? 'items waiting now' : null,
+      cta: kind === 'pause' ? 'Request pause' : 'Request ' + (n === 1 ? 'action' : 'release') });
+  }
+
+  /* ---------- wiring ---------- */
+  U.$$('#win button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      win = b.dataset.w === 'day' ? 'day' : +b.dataset.w;
+      U.$$('#win button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      renderCharts(U.now());
+    });
+  });
+  function render(m) {
+    renderKpis(m); renderQueues(m); renderHead(m); renderCharts(m); renderWorkers(m); renderErrors(m); renderItems(m);
+  }
+  var lastTab = null;
+  U.onTime(function (m, o) { if (o.chapter) itemTab = null; render(m); });
+  window.addEventListener('dbq-theme', function () { renderCharts(U.now()); });
+  U.start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DBQ Flow Map</title>
+<script>try { var t = localStorage.getItem('dbq-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<link rel="stylesheet" href="assets/dbq.css">
+<style>
+  .map-card { overflow: hidden; }
+  .map-head { display: flex; align-items: flex-start; gap: 12px 20px; padding: 16px 18px 4px; flex-wrap: wrap; }
+  .map-head h1 { font-size: 18px; font-weight: 650; }
+  .map-head p { margin: 2px 0 0; color: var(--ink-3); font-size: 12.5px; max-width: 62ch; }
+  .map-head .spacer { flex: 1; }
+  .e2e { display: flex; gap: 18px; flex-wrap: wrap; }
+  .e2e div { display: flex; flex-direction: column; }
+  .e2e b { font-size: 20px; font-weight: 650; letter-spacing: -0.02em; white-space: nowrap; }
+  .e2e span { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+  #map { width: 100%; display: block; }
+  #map text { font-family: var(--font); }
+  #map .mono { font-family: var(--mono); }
+  .node { cursor: pointer; }
+  .node:focus { outline: none; }
+  .node:focus-visible .node-box { stroke: var(--accent); stroke-width: 2; }
+  .node-box { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+  .node.sel .node-box { stroke: var(--accent); stroke-width: 2; }
+  .node:hover .node-box { stroke: var(--ink-3); }
+  .node-line { fill: none; stroke: var(--line); stroke-width: 1; }
+  .node.sel .node-line { stroke: var(--accent); stroke-width: 2; }
+  .node:hover .node-line { stroke: var(--ink-3); }
+  .edge { fill: none; stroke: var(--ink-3); opacity: 0.28; stroke-linecap: round; }
+  .edge.idle { stroke-dasharray: 2 4; opacity: 0.35; }
+  .flow { fill: none; stroke: var(--ink); opacity: 0.55; stroke-linecap: round; stroke-dasharray: 1.5 11; animation: flow 1.2s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -12.5; } }
+  .retry { fill: none; stroke: var(--critical); stroke-width: 2; stroke-dasharray: 5 4; }
+  .retry-flow { fill: none; stroke: var(--critical); stroke-width: 2; opacity: .0; }
+  .pill-bg { fill: var(--surface); stroke: var(--line); }
+  .pill-t { font-size: 10.5px; font-weight: 600; fill: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .legend-map { display: flex; gap: 16px; flex-wrap: wrap; padding: 2px 18px 14px; font-size: 12px; color: var(--ink-3); align-items: center; }
+  .legend-map span { display: inline-flex; gap: 6px; align-items: center; }
+  .legend-map span.plain { display: block; line-height: 1.6; }
+  .side-flow { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-top: 1px solid var(--line-2); font-size: 12.5px; color: var(--ink-2); flex-wrap: wrap; cursor: pointer; }
+  .side-flow:hover { background: var(--surface-2); }
+  .side-flow .mono { font-weight: 620; color: var(--ink); }
+  .side-flow svg.arrow { width: 14px; height: 14px; color: var(--ink-3); }
+
+  .below { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
+  .stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: var(--line-2); border-radius: 8px; overflow: hidden; box-shadow: 0 0 0 1px var(--line-2); }
+  .stats div { background: var(--surface); padding: 10px 12px; min-width: 0; }
+  .stats b { display: block; font-size: 19px; font-weight: 650; letter-spacing: -0.02em; white-space: nowrap; }
+  .stats span { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+  .whatif { display: flex; gap: 10px 18px; align-items: center; flex-wrap: wrap; margin: 14px 0 6px; padding: 10px 12px; border-radius: 8px; background: var(--accent-wash); }
+  .whatif .eyebrow { color: var(--accent-ink); }
+  .stepper { display: inline-flex; align-items: center; gap: 0; border-radius: 8px; box-shadow: 0 0 0 1px var(--line); background: var(--surface); }
+  .stepper button { width: 30px; height: 30px; border: 0; background: transparent; cursor: pointer; font-size: 16px; color: var(--ink-2); }
+  .stepper button:hover { color: var(--ink); }
+  .stepper output { min-width: 26px; text-align: center; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .whatif label { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+  .verdict { font-size: 12.5px; color: var(--ink-2); margin: 8px 0 0; }
+  .verdict b { color: var(--ink); }
+  .fc-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+  .fc-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .fc-legend i { display: inline-block; width: 16px; height: 0; border-top: 2px solid var(--s1); }
+  .fc-legend i.d1 { border-top: 2px dashed var(--ink-3); }
+  .fc-legend i.d2 { border-top: 2px dashed var(--s1); }
+  .fc-legend i.band { height: 10px; border: 0; background: var(--s1); opacity: .15; border-radius: 2px; }
+
+  .bars { display: grid; gap: 8px; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; font-size: 12.5px; }
+  .bar-row .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-row .val { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; text-align: right; }
+  .bar-row .track { grid-column: 1 / -1; height: 8px; border-radius: 4px; background: var(--surface-3); position: relative; overflow: hidden; }
+  .bar-row .track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 4px 4px 0; background: var(--s1); }
+  .bar-row.hl .track i { background: var(--s1); }
+  .bar-row.dim .track i { background: var(--axis); }
+  .bar-row.stop .track i { background: var(--serious); }
+  .sub-h { font-size: 12px; font-weight: 640; color: var(--ink-3); margin: 0 0 10px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .sub-h span:last-child { white-space: nowrap; }
+
+  .files { margin-top: 16px; }
+  .file-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 70px 80px minmax(0, 2fr) minmax(0, 1.2fr); gap: 6px 14px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--line-2); font-size: 12.5px; }
+  .file-row.head { border-top: 0; font-size: 11.5px; font-weight: 600; color: var(--ink-3); padding-top: 4px; padding-bottom: 6px; }
+  .file-name { font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .prog { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--surface-3); gap: 2px; }
+  .prog i { display: block; height: 100%; }
+  .prog i:first-child { border-radius: 5px 0 0 5px; }
+  .fstate { font-size: 12.5px; color: var(--ink-2); }
+  .fstate b { color: var(--ink); font-weight: 620; }
+  .r { text-align: right; font-variant-numeric: tabular-nums; }
+
+  @media (max-width: 1060px) {
+    .below { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 760px) {
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stats div:last-child { grid-column: 1 / -1; }
+    .file-row { grid-template-columns: minmax(0, 1fr) auto; }
+    .file-row .c-landed, .file-row .c-rows { display: none; }
+    .file-row .prog { grid-column: 1 / -1; }
+    .file-row.head { display: none; }
+    .map-head { padding: 14px 14px 2px; }
+    .legend-map { padding: 2px 14px 12px; }
+    .side-flow { padding: 10px 14px; }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <section class="card map-card" aria-label="Flow map">
+    <div class="map-head">
+      <div><h1>Where the work is flowing</h1>
+        <p>Producers on the left, consumers on the right. Lines thicken with items per minute, and each queue fills up as its oldest item uses up its wait target. Drawn from the <code>producer</code> and <code>claimed_by</code> columns, so a new service shows up without configuration.</p></div>
+      <span class="spacer"></span>
+      <div class="e2e" id="e2e"></div>
+    </div>
+    <svg id="map" role="img" aria-label="Flow of work from producers through queues to consumers"></svg>
+    <div class="legend-map">
+      <span><svg width="28" height="8" aria-hidden="true"><line x1="1" y1="4" x2="27" y2="4" stroke="var(--ink-3)" stroke-width="5" opacity=".3" stroke-linecap="round"/></svg>items per minute</span>
+      <span><svg width="14" height="14" aria-hidden="true"><rect x="1" y="1" width="12" height="12" rx="3" fill="var(--surface)" stroke="var(--line)"/><rect x="1" y="7" width="12" height="6" fill="var(--s1)" opacity=".22"/></svg>share of wait target used</span>
+      <span><svg width="28" height="8" aria-hidden="true"><line x1="1" y1="4" x2="27" y2="4" stroke="var(--critical)" stroke-width="2" stroke-dasharray="5 4"/></svg>failing and retrying</span>
+      <span class="plain">Consumer verdicts: <b>OK</b> · <b>WARN</b> lag rising · <b>STALL</b> holding, not finishing · <b>STOP</b> no heartbeat · <b>ERR</b> failing</span>
+    </div>
+    <div class="side-flow" id="sideFlow" tabindex="0" role="button"></div>
+  </section>
+
+  <div class="below">
+    <section class="card" aria-label="Drain forecast">
+      <div class="card-h"><h2 class="card-t" id="fcTitle">Drain forecast</h2><span class="spacer"></span><span class="card-sub" id="fcSub"></span></div>
+      <div class="card-b">
+        <div class="stats" id="fcStats"></div>
+        <div class="whatif" id="whatif">
+          <span class="eyebrow">What if</span>
+          <label>Add consumers <span class="stepper"><button type="button" id="minus" aria-label="Fewer">−</button><output id="addN">0</output><button type="button" id="plus" aria-label="More">+</button></span></label>
+          <label id="restoreWrap"><input type="checkbox" id="restore"> Restart <span class="mono" id="restoreName"></span> and release its claims</label>
+        </div>
+        <div id="fcChart" class="chart"></div>
+        <div class="fc-legend"><span><i></i>Waiting so far</span><span><i class="d1"></i>At today's rate</span><span><i class="d2"></i>With the what-if</span><span><i class="band"></i>±15% rate</span></div>
+        <p class="verdict" id="fcVerdict"></p>
+      </div>
+    </section>
+    <section class="card" aria-label="Breakdowns">
+      <div class="card-h"><h2 class="card-t">Who filled it, who drains it</h2></div>
+      <div class="card-b">
+        <div class="sub-h"><span>Waiting items by source</span><span id="srcTotal"></span></div>
+        <div class="bars" id="bySource"></div>
+        <div class="sub-h" style="margin-top:20px"><span>Completed in the last 15 min, by consumer</span><span id="conTotal"></span></div>
+        <div class="bars" id="byConsumer"></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card files" id="filesCard" aria-label="Files in flight">
+    <div class="card-h"><h2 class="card-t">Upstream files in flight</h2><span class="card-sub" id="filesSub"></span></div>
+    <div id="files" style="padding:6px 0 6px"></div>
+    <div class="legend" style="padding:4px 16px 14px"><span><i style="background:var(--s3)"></i>Done</span><span><i style="background:var(--s1)"></i>Waiting or in flight</span><span><i style="background:var(--serious)"></i>Stuck</span><span><i style="background:var(--critical)"></i>Dead</span></div>
+  </section>
+  <p class="footnote" style="margin-top:20px">Concept B of three. A map for the people who own the pipeline rather than the shift: where work comes from, where it piles up, how long until it clears, and what adding capacity would buy. Inspired by Kafka UI consumer lag, LinkedIn Burrow's lag verdicts and service maps. Forecasts use the last five minutes of rates.</p>
+</main>
+
+<script src="assets/sim.js"></script>
+<script src="assets/ui.js"></script>
+<script>
+(function () {
+  'use strict';
+  var D = window.DBQ, U = window.DBQUI, esc = U.esc, $ = U.$, $$ = U.$$;
+  U.mountChrome({ page: 'flow', subtitle: 'Concept B · Flow map' });
+
+  var hashQ = U.parseHash().q;
+  var sel = hashQ && D.QI[hashQ] != null ? hashQ : 'payments.inbound';
+  var addN = 0, restore = false;
+
+  // topology: grid positions (layer, row). In a real build this comes from SELECT DISTINCT producer / claimed_by.
+  var NODES = [
+    { id: 'AIS', type: 'svc', l: 0, r: 0.5, title: 'AIS', role: 'file ingestion', instances: ['ais-app-01', 'ais-app-02'], selects: 'payments.inbound' },
+    { id: 'SCHED', type: 'svc', l: 0, r: 2, title: 'Scheduler', role: 'cron', instances: ['recon-scheduler'], selects: 'recon.daily' },
+    { id: 'payments.inbound', type: 'q', l: 1, r: 0 },
+    { id: 'mandates.inbound', type: 'q', l: 1, r: 1 },
+    { id: 'recon.daily', type: 'q', l: 1, r: 2 },
+    { id: 'MMP', type: 'svc', l: 2, r: 0.5, title: 'MMP', role: 'processor', consumes: ['payments.inbound', 'mandates.inbound'], selects: 'payments.inbound' },
+    { id: 'RECON', type: 'svc', l: 2, r: 2, title: 'Recon', role: 'batch', consumes: ['recon.daily'], selects: 'recon.daily' },
+    { id: 'ledger.postings', type: 'q', l: 3, r: 0 },
+    { id: 'notify.outbound', type: 'q', l: 3, r: 1 },
+    { id: 'LEDGER', type: 'svc', l: 4, r: 0, title: 'Ledger', role: 'posting', consumes: ['ledger.postings'], selects: 'ledger.postings' },
+    { id: 'NOTIFY', type: 'svc', l: 4, r: 1, title: 'Notifier', role: 'e-mail, SMS', consumes: ['notify.outbound'], selects: 'notify.outbound' }
+  ];
+  var NI = {}; NODES.forEach(function (n) { NI[n.id] = n; });
+  // edges carry a rate function of the minute
+  function r5(q, key, m) { return D.sum(D.S[q][key], m - 4, m) / 5; }
+  var EDGES = [
+    { from: 'AIS', to: 'payments.inbound', rate: function (m) { return r5('payments.inbound', 'arr', m); } },
+    { from: 'AIS', to: 'mandates.inbound', rate: function (m) { return r5('mandates.inbound', 'arr', m); } },
+    { from: 'SCHED', to: 'recon.daily', rate: function (m) { return r5('recon.daily', 'arr', m); } },
+    { from: 'payments.inbound', to: 'MMP', rate: function (m) { return r5('payments.inbound', 'done', m); } },
+    { from: 'mandates.inbound', to: 'MMP', rate: function (m) { return r5('mandates.inbound', 'done', m); } },
+    { from: 'recon.daily', to: 'RECON', rate: function (m) { return r5('recon.daily', 'done', m); } },
+    { from: 'MMP', to: 'ledger.postings', rate: function (m) { return r5('ledger.postings', 'arr', m); } },
+    { from: 'MMP', to: 'notify.outbound', rate: function (m) { return r5('notify.outbound', 'arr', m); } },
+    { from: 'ledger.postings', to: 'LEDGER', rate: function (m) { return r5('ledger.postings', 'done', m); } },
+    { from: 'notify.outbound', to: 'NOTIFY', rate: function (m) { return r5('notify.outbound', 'done', m); } }
+  ];
+  NI.LEDGER.instances = D.QUEUES[D.QI['ledger.postings']].workers;
+  NI.NOTIFY.instances = D.QUEUES[D.QI['notify.outbound']].workers;
+  NI.MMP.instances = D.QUEUES[D.QI['payments.inbound']].workers;
+  NI.RECON.instances = D.QUEUES[D.QI['recon.daily']].workers;
+
+  /* ---------- Burrow-style verdicts ---------- */
+  function groupVerdict(qname, m) {
+    var s = D.S[qname], q = D.QUEUES[D.QI[qname]];
+    var f10 = D.sum(s.fail, m - 9, m), d10 = D.sum(s.done, m - 9, m);
+    if (f10 > d10 && f10 > 50) return { v: 'ERR', sev: 'critical', why: 'more attempts fail than succeed' };
+    var drained = false; for (var i = m - 9; i <= m; i++) if (i >= 0 && s.oldest[i] < 30) drained = true;
+    if (drained) return { v: 'OK', sev: 'good', why: 'caught up at least once in 10 min' };
+    var rising = true; for (i = m - 8; i <= m; i++) if (!(s.oldest[i] >= s.oldest[i - 1])) rising = false;
+    if (d10 === 0) return { v: 'STALL', sev: 'serious', why: 'items waiting but none completing' };
+    if (rising) return { v: 'WARN', sev: 'warning', why: 'completing, but lag rose at every sample' };
+    return { v: 'OK', sev: 'good', why: 'lag falling' };
+  }
+  function instVerdict(id, qname, m) {
+    var q = D.QUEUES[D.QI[qname]], w = D.WORKERS[id];
+    if (w.hb[m] > q.stale) return { v: 'STOP', sev: 'serious' };
+    return null;
+  }
+
+  /* ---------- layout ---------- */
+  function layout(W) {
+    var vertical = W < 720, pos = {};
+    if (!vertical) {
+      var padX = 14, colW = (W - padX * 2) / 5, rowH = 124, top = 40;
+      NODES.forEach(function (n) {
+        var w = n.type === 'q' ? Math.min(184, colW - 44) : Math.min(150, colW - 64), h = n.type === 'q' ? 98 : 74;
+        pos[n.id] = { x: padX + colW * (n.l + 0.5), y: top + rowH * (n.r + 0.5), w: w, h: h };
+      });
+      return { vertical: false, pos: pos, H: top + rowH * 3 + 4 };
+    }
+    var pad = 10, cw = (W - pad * 2) / 3, rh = 132, top2 = 14;
+    NODES.forEach(function (n) {
+      var w = cw - 10, h = n.type === 'q' ? 92 : 64;
+      pos[n.id] = { x: pad + cw * (n.r + 0.5), y: top2 + rh * (n.l + 0.5), w: w, h: h };
+    });
+    return { vertical: true, pos: pos, H: top2 + rh * 5 + 4 };
+  }
+
+  function edgePath(a, b, vertical) {
+    var sx, sy, tx, ty;
+    if (!vertical) { sx = a.x + a.w / 2; sy = a.y; tx = b.x - b.w / 2; ty = b.y; var c = (tx - sx) * 0.5;
+      return { d: 'M' + sx + ' ' + sy + 'C' + (sx + c) + ' ' + sy + ',' + (tx - c) + ' ' + ty + ',' + tx + ' ' + ty, mx: (sx + tx) / 2, my: (sy + ty) / 2 }; }
+    sx = a.x; sy = a.y + a.h / 2; tx = b.x; ty = b.y - b.h / 2; var c2 = (ty - sy) * 0.5;
+    return { d: 'M' + sx + ' ' + sy + 'C' + sx + ' ' + (sy + c2) + ',' + tx + ' ' + (ty - c2) + ',' + tx + ' ' + ty, mx: (sx + tx) / 2, my: (sy + ty) / 2 };
+  }
+  function icon(sev, x, y, size) {
+    return '<svg x="' + x + '" y="' + y + '" width="' + size + '" height="' + size + '" viewBox="0 0 16 16" class="status ' + sev + '" style="color:var(--' + (sev === 'good' ? 'good' : sev) + ')">' + U.ICON[sev].replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '') + '</svg>';
+  }
+
+  function renderMap(m) {
+    var svg = $('#map'), W = svg.parentNode.clientWidth;
+    var L = layout(W), pos = L.pos, v = L.vertical;
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + L.H);
+    svg.setAttribute('height', L.H);
+    var out = '';
+    var rates = EDGES.map(function (e) { return e.rate(m); });
+    var maxR = Math.max.apply(null, rates.concat([200]));
+    // edges
+    EDGES.forEach(function (e, i) {
+      var p = edgePath(pos[e.from], pos[e.to], v), r = rates[i];
+      var w = r < 0.5 ? 1.5 : 2 + 9 * Math.sqrt(r / maxR);
+      out += '<path class="edge' + (r < 0.5 ? ' idle' : '') + '" d="' + p.d + '" stroke-width="' + w.toFixed(1) + '"/>';
+      if (r >= 0.5) out += '<path class="flow" d="' + p.d + '" stroke-width="' + Math.max(1.5, w * 0.45).toFixed(1) + '" style="animation-duration:' + Math.max(0.35, Math.min(2.4, 60 / Math.sqrt(r * 30))).toFixed(2) + 's"/>';
+      var lbl = r >= 0.5 ? U.rate(r) + '/min' : 'idle';
+      var tw = lbl.length * 6 + 12;
+      out += '<g class="edge-lbl" data-edge="' + i + '"><rect class="pill-bg" x="' + (p.mx - tw / 2) + '" y="' + (p.my - 9) + '" width="' + tw + '" height="18" rx="9"/>' +
+        '<text class="pill-t" x="' + p.mx + '" y="' + (p.my + 3.6) + '" text-anchor="middle">' + lbl + '</text></g>';
+    });
+    // retry loop for queues failing a lot
+    D.QUEUES.forEach(function (q) {
+      var f = r5(q.name, 'fail', m); if (f < 30) return;
+      var cons = NODES.filter(function (n) { return n.consumes && n.consumes.indexOf(q.name) >= 0; })[0];
+      var a = pos[cons.id], b = pos[q.name], d, lx, ly, anchor = 'middle';
+      if (!v) { var yTop = Math.min(a.y - a.h / 2, b.y - b.h / 2) - 34;
+        d = 'M' + a.x + ' ' + (a.y - a.h / 2) + 'C' + a.x + ' ' + yTop + ',' + b.x + ' ' + yTop + ',' + b.x + ' ' + (b.y - b.h / 2); lx = (a.x + b.x) / 2; ly = yTop + 8; }
+      else { var xL = Math.min(a.x - a.w / 2, b.x - b.w / 2) - 7;
+        d = 'M' + (a.x - a.w / 2) + ' ' + a.y + 'C' + xL + ' ' + a.y + ',' + xL + ' ' + b.y + ',' + (b.x - b.w / 2) + ' ' + b.y; lx = null; }
+      out += '<path class="retry" d="' + d + '" marker-end="url(#arrRed)"/>';
+      if (lx != null) {
+        var t = U.rate(f) + '/min failing, retried';
+        var tw2 = t.length * 6 + 14;
+        out += '<rect x="' + (lx - tw2 / 2) + '" y="' + (ly - 10) + '" width="' + tw2 + '" height="19" rx="9.5" fill="var(--surface)"/>' +
+          '<rect x="' + (lx - tw2 / 2) + '" y="' + (ly - 10) + '" width="' + tw2 + '" height="19" rx="9.5" fill="var(--critical-wash)" stroke="var(--critical)" stroke-opacity=".4"/>' +
+          '<text x="' + lx + '" y="' + (ly + 3.5) + '" text-anchor="middle" font-size="10.5" font-weight="650" fill="var(--critical-ink)">' + t + '</text>';
+      }
+    });
+    // nodes
+    NODES.forEach(function (n) {
+      var p = pos[n.id], x0 = p.x - p.w / 2, y0 = p.y - p.h / 2;
+      var selCls = (n.id === sel || n.selects === sel && n.type === 'svc' && false) ? ' sel' : '';
+      if (n.type === 'q') {
+        var qv = D.queueAt(n.id, m), q = qv.q, sev = D.healthOf(n.id, m);
+        var ratio = Math.min(1, qv.oldest / q.slo), lvl = (p.h - 2) * Math.max(0.03, ratio);
+        var col = qv.oldest >= q.slo ? 'var(--critical)' : ratio >= 0.66 ? 'var(--warning)' : 'var(--s1)';
+        var dot = n.id.indexOf('.');
+        out += '<g class="node' + (n.id === sel ? ' sel' : '') + '" data-node="' + n.id + '" tabindex="0" role="button" aria-label="' + esc(n.id) + '">' +
+          '<clipPath id="cp-' + n.id.replace('.', '-') + '"><rect x="' + x0 + '" y="' + y0 + '" width="' + p.w + '" height="' + p.h + '" rx="10"/></clipPath>' +
+          '<rect class="node-box" x="' + x0 + '" y="' + y0 + '" width="' + p.w + '" height="' + p.h + '" rx="10"/>' +
+          '<g clip-path="url(#cp-' + n.id.replace('.', '-') + ')"><rect x="' + x0 + '" y="' + (y0 + p.h - lvl) + '" width="' + p.w + '" height="' + lvl + '" fill="' + col + '" opacity="' + (qv.oldest >= q.slo ? 0.16 : 0.13) + '"/>' +
+          '<rect x="' + x0 + '" y="' + (y0 + p.h - lvl) + '" width="4" height="' + lvl + '" fill="' + col + '"/></g>' +
+          '<rect class="node-line" x="' + x0 + '" y="' + y0 + '" width="' + p.w + '" height="' + p.h + '" rx="10"/>' +
+          (v ? '<text class="mono" x="' + (x0 + 10) + '" y="' + (y0 + 16) + '" font-size="10" font-weight="650" fill="var(--ink)">' + esc(n.id.slice(0, dot)) + '</text>' +
+            '<text class="mono" x="' + (x0 + 10) + '" y="' + (y0 + 28) + '" font-size="10" fill="var(--ink-3)">' + esc(n.id.slice(dot)) + '</text>'
+            : '<text class="mono" x="' + (x0 + 10) + '" y="' + (y0 + 19) + '" font-size="11.5" font-weight="650" fill="var(--ink)">' + esc(n.id) + '</text>') +
+          (sev !== 'good' && !v ? icon(sev, x0 + p.w - 22, y0 + 8, 14) : '') +
+          (sev !== 'good' && v ? icon(sev, x0 + p.w - 19, y0 + 7, 12) : '') +
+          '<text x="' + (x0 + 10) + '" y="' + (y0 + (v ? 51 : 50)) + '" font-size="' + (v ? 17 : 22) + '" font-weight="650" fill="var(--ink)" letter-spacing="-0.4">' + (qv.oldest ? D.fmtDur(qv.oldest) : 'caught up') + '</text>' +
+          (!v ? '<text x="' + (x0 + 10) + '" y="' + (y0 + 66) + '" font-size="10.5" fill="var(--ink-3)">oldest wait · target ' + D.fmtDur(q.slo) + '</text>' : '') +
+          '<text x="' + (x0 + 10) + '" y="' + (y0 + (v ? 68 : 86)) + '" font-size="' + (v ? 10 : 11) + '" fill="var(--ink-2)" font-weight="560">' + U.compact(qv.waiting) + ' waiting' + (qv.stuck && !v ? ' · ' + qv.stuck + ' stuck' : '') + (qv.dead && !v && qv.dead > 50 ? ' · ' + U.compact(qv.dead) + ' dead' : '') + '</text>' +
+          (v && (qv.stuck || qv.dead > 50) ? '<text x="' + (x0 + 10) + '" y="' + (y0 + 82) + '" font-size="10" fill="var(--serious-ink)" font-weight="600">' + (qv.stuck ? qv.stuck + ' stuck' : U.compact(qv.dead) + ' dead') + '</text>' : '') +
+          '</g>';
+      } else {
+        var insts = n.instances || [];
+        var cq = n.consumes ? n.consumes[0] : null;
+        var gv = cq ? groupVerdict(cq, m) : null;
+        var pipW = Math.min(14, (p.w - 20) / Math.max(1, insts.length) - 3);
+        out += '<g class="node" data-node="' + n.id + '" tabindex="0" role="button" aria-label="' + esc(n.title) + '">' +
+          '<rect class="node-box" x="' + x0 + '" y="' + y0 + '" width="' + p.w + '" height="' + p.h + '" rx="10"/>' +
+          '<text x="' + (x0 + 10) + '" y="' + (y0 + 20) + '" font-size="' + (v ? 12.5 : 13.5) + '" font-weight="680" fill="var(--ink)">' + esc(n.title) + '</text>' +
+          (!v ? '<text x="' + (x0 + 10) + '" y="' + (y0 + 35) + '" font-size="10.5" fill="var(--ink-3)">' + esc(n.role) + ' · ' + insts.length + (insts.length === 1 ? ' instance' : ' instances') + '</text>' : '');
+        insts.forEach(function (id, i) {
+          var stop = cq && instVerdict(id, cq, m);
+          out += '<rect x="' + (x0 + 10 + i * (pipW + 3)) + '" y="' + (y0 + (v ? 30 : 44)) + '" width="' + pipW + '" height="' + (v ? 10 : 12) + '" rx="2.5" fill="var(--' + (stop ? 'serious' : 'good') + ')"><title>' + esc(id) + (stop ? ' · STOP: no heartbeat' : ' · heartbeating') + '</title></rect>';
+        });
+        if (gv) {
+          var stops = insts.filter(function (id) { return instVerdict(id, cq, m); }).length;
+          var txt = gv.v + (stops ? ' · ' + stops + ' STOP' : '');
+          out += '<text x="' + (x0 + 10) + '" y="' + (y0 + (v ? 55 : 68)) + '" font-size="' + (v ? 10 : 10.5) + '" font-weight="700" letter-spacing=".3" fill="var(--' + (gv.sev === 'good' ? 'good' : gv.sev) + '-ink)">' + txt + '</text>';
+        }
+        out += '</g>';
+      }
+    });
+    svg.innerHTML = '<defs><marker id="arrRed" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1L9 5L1 9z" fill="var(--critical)"/></marker></defs>' + out;
+    $$('#map .node').forEach(function (g) {
+      var go = function () { var n = NI[g.dataset.node]; select(n.type === 'q' ? n.id : n.selects); };
+      g.addEventListener('click', go); g.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+    });
+    $$('#map .edge-lbl').forEach(function (g) {
+      g.addEventListener('pointermove', function (e) {
+        var ed = EDGES[+g.dataset.edge], a = NI[ed.from], b = NI[ed.to];
+        U.tip(U.tipRows(D.clock(m) + ' · last 5 min', [{ color: 'var(--ink-3)', value: U.rate(ed.rate(m)) + '/min', label: (a.title || a.id) + ' → ' + (b.title || b.id) }]), e.clientX, e.clientY);
+      });
+      g.addEventListener('pointerleave', function () { U.tip(null); });
+    });
+    // end-to-end
+    var p = D.queueAt('payments.inbound', m), l = D.queueAt('ledger.postings', m);
+    var e2e = p.p95 + l.p95 + 4;
+    $('#e2e').innerHTML = '<div><b>' + D.fmtDur(e2e) + '</b><span>file row → ledger posting, p95 now</span></div>' +
+      '<div><b>' + U.rate(r5('ledger.postings', 'done', m)) + '/min</b><span>reaching the ledger</span></div>';
+    // side flow
+    var a = D.queueAt('audit.archive', m), asev = D.healthOf('audit.archive', m);
+    $('#sideFlow').innerHTML = '<span class="eyebrow">Side flow</span><span>All services</span><svg class="arrow" viewBox="0 0 16 16">' + U.ICON.arrow.replace(/^<svg[^>]*>|<\/svg>$/g, '') + '</svg>' +
+      '<span class="mono">audit.archive</span><svg class="arrow" viewBox="0 0 16 16">' + U.ICON.arrow.replace(/^<svg[^>]*>|<\/svg>$/g, '') + '</svg><span>Archiver</span>' + U.status(asev) +
+      '<span class="muted">' + D.fmtNum(a.waiting) + ' waiting, oldest ' + D.fmtDur(a.oldest) + ' of a ' + D.fmtDur(a.q.slo) + ' target: a big count that is fine</span>';
+  }
+  $('#sideFlow').addEventListener('click', function () { select('audit.archive'); });
+  $('#sideFlow').addEventListener('keydown', function (e) { if (e.key === 'Enter') select('audit.archive'); });
+
+  function select(name) {
+    sel = name; addN = 0; restore = false; U.writeHash({ q: name });
+    render(U.now());
+  }
+
+  /* ---------- forecast ---------- */
+  function forecast(m) {
+    var q = D.QUEUES[D.QI[sel]], s = D.S[sel], v = D.queueAt(sel, m);
+    var live = Math.max(1, v.live);
+    var failShare = v.fail5 / Math.max(1, v.fail5 + v.out5);
+    var stuckW = sel === 'payments.inbound' || sel === 'mandates.inbound' ? D.STUCK.worker : null;
+    var canRestore = !!(stuckW && D.WORKERS[stuckW].hb[m] > q.stale);
+    var perW = v.out5 / live;
+    var extra = addN + (restore && canRestore ? 1 : 0);
+    var net0 = v.out5 - v.in5;
+    var bound = failShare > 0.5;   // throughput is limited by failures, not by consumers
+    var net1 = bound ? net0 : v.out5 + extra * perW - v.in5;
+    var W0 = v.waiting + (restore && canRestore ? (D.STUCK.claims[sel] || 0) : 0);
+    return { q: q, s: s, v: v, net0: net0, net1: net1, W0: v.waiting, W1: W0, bound: bound, failShare: failShare, canRestore: canRestore, stuckW: stuckW, extra: extra, perW: perW };
+  }
+  function eta(W, net) { return net > 0 ? Math.max(1, Math.round(W / net)) : null; }
+  function renderForecast(m) {
+    var f = forecast(m), v = f.v, q = f.q;
+    $('#fcTitle').textContent = 'Drain forecast · ' + sel;
+    $('#fcSub').textContent = 'rates from the last 5 minutes';
+    var e0 = eta(f.W0, f.net0), e1 = eta(f.W1, f.net1);
+    var clears = v.waiting < 50 ? 'caught up' : e0 ? D.clock(Math.min(m + e0, 9999)) : 'not draining';
+    if (e0 && m + e0 >= D.N) clears = 'after 15:00';
+    $('#fcStats').innerHTML =
+      '<div><b>' + D.fmtNum(v.waiting) + '</b><span>waiting now</span></div>' +
+      '<div><b>' + U.rate(v.in5) + '<small style="font-size:12px;color:var(--ink-3)">/min</small></b><span>arriving</span></div>' +
+      '<div><b>' + U.rate(v.out5) + '<small style="font-size:12px;color:var(--ink-3)">/min</small></b><span>completing</span></div>' +
+      '<div><b>' + (f.net0 > 0 ? '−' : f.net0 < 0 ? '+' : '') + U.rate(Math.abs(f.net0)) + '<small style="font-size:12px;color:var(--ink-3)">/min</small></b><span>net change in waiting</span></div>' +
+      '<div><b>' + clears + '</b><span>' + (v.waiting < 50 ? 'nothing to drain' : 'backlog clears at') + '</span></div>';
+    $('#addN').textContent = addN;
+    $('#restoreWrap').style.display = f.canRestore ? '' : 'none';
+    $('#restoreName').textContent = f.stuckW || '';
+    $('#restore').checked = restore;
+    // chart
+    var host = $('#fcChart'), Wd = host.clientWidth, H = 200; if (!Wd) return;
+    var past = 90, fut = 120, from = Math.max(0, m - past), to = m + fut;
+    var series = [], maxV = 10;
+    for (var i = from; i <= m; i++) { series.push(f.s.waiting[i]); maxV = Math.max(maxV, f.s.waiting[i]); }
+    function proj(W, net, t) { return Math.max(0, W - net * t); }
+    for (var t = 0; t <= fut; t += 5) maxV = Math.max(maxV, proj(f.W0, f.net0, t), proj(f.W1, f.net1 * 0.85, t));
+    maxV = U.niceMax(maxV * 1.08);
+    var padL = 44, padR = 12, padT = 12, padB = 22, iw = Wd - padL - padR, ih = H - padT - padB;
+    var X = function (mm) { return padL + iw * (mm - from) / (to - from); }, Y = function (val) { return padT + ih - ih * Math.min(val, maxV) / maxV; };
+    var o = '';
+    [0, maxV / 2, maxV].forEach(function (tv) {
+      o += '<line class="' + (tv ? 'gridline' : 'baseline') + '" x1="' + padL + '" x2="' + (Wd - padR) + '" y1="' + Y(tv) + '" y2="' + Y(tv) + '"/>' +
+        '<text class="tick" x="' + (padL - 8) + '" y="' + (Y(tv) + 3.5) + '" text-anchor="end">' + U.compact(tv) + '</text>';
+    });
+    for (var tm = Math.ceil((from + D.START_H * 60) / 30) * 30 - D.START_H * 60; tm <= to; tm += (iw < 420 ? 60 : 30)) {
+      if (X(tm) < padL + 14 || X(tm) > Wd - padR - 14) continue;
+      o += '<text class="tick" x="' + X(tm) + '" y="' + (H - 6) + '" text-anchor="middle">' + D.clock(tm % (24 * 60)) + '</text>';
+    }
+    o += '<rect x="' + X(m) + '" y="' + padT + '" width="' + (X(to) - X(m)) + '" height="' + ih + '" fill="var(--surface-2)"/>';
+    o += '<text x="' + (X(m) + 6) + '" y="' + (padT + 11) + '" font-size="10" fill="var(--ink-3)" font-weight="600">forecast</text>';
+    var d = series.map(function (val, k) { return (k ? 'L' : 'M') + X(from + k).toFixed(1) + ' ' + Y(val).toFixed(1); }).join('');
+    o += '<path d="' + d + 'L' + X(m) + ' ' + Y(0) + 'L' + X(from) + ' ' + Y(0) + 'Z" fill="var(--s1)" opacity=".12"/><path d="' + d + '" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>';
+    function line(W, net, dash, color, op) {
+      var p = '';
+      for (var tt = 0; tt <= fut; tt++) { p += (tt ? 'L' : 'M') + X(m + tt).toFixed(1) + ' ' + Y(proj(W, net, tt)).toFixed(1); if (proj(W, net, tt) <= 0) break; }
+      return '<path d="' + p + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-dasharray="' + dash + '" opacity="' + (op || 1) + '"/>';
+    }
+    if (v.waiting >= 50) {
+      // cone around the what-if projection
+      var up = '', dn = '';
+      for (var tt = 0; tt <= fut; tt++) { up += (tt ? 'L' : 'M') + X(m + tt).toFixed(1) + ' ' + Y(proj(f.W1, f.net1 >= 0 ? f.net1 * 0.85 : f.net1 * 1.15, tt)).toFixed(1); }
+      for (tt = fut; tt >= 0; tt--) { dn += 'L' + X(m + tt).toFixed(1) + ' ' + Y(proj(f.W1, f.net1 >= 0 ? f.net1 * 1.15 : f.net1 * 0.85, tt)).toFixed(1); }
+      o += '<path d="' + up + dn + 'Z" fill="var(--s1)" opacity=".10"/>';
+      o += line(f.W0, f.net0, '5 4', 'var(--ink-3)');
+      if (f.extra) o += line(f.W1, f.net1, '5 4', 'var(--s1)');
+      if (e0 && e0 <= fut) o += '<circle cx="' + X(m + e0) + '" cy="' + Y(0) + '" r="4" fill="var(--ink-3)" stroke="var(--surface)" stroke-width="2"/><text x="' + (X(m + e0) + 8) + '" y="' + (Y(0) - 6) + '" font-size="10.5" font-weight="650" fill="var(--ink-2)">' + D.clock(m + e0) + '</text>';
+      if (f.extra && e1 && e1 <= fut && e1 !== e0) o += '<circle cx="' + X(m + e1) + '" cy="' + Y(0) + '" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/><text x="' + (X(m + e1) + 8) + '" y="' + (Y(0) - 6) + '" font-size="10.5" font-weight="650" fill="var(--accent-ink)">' + D.clock(m + e1) + '</text>';
+    }
+    o += '<line x1="' + X(m) + '" x2="' + X(m) + '" y1="' + padT + '" y2="' + (padT + ih) + '" stroke="var(--ink)" opacity=".35"/>';
+    host.innerHTML = '<svg viewBox="0 0 ' + Wd + ' ' + H + '" height="' + H + '" role="img" aria-label="Waiting items, history and forecast">' + o + '</svg>';
+    // verdict
+    var txt;
+    if (v.waiting < 50) txt = '<b>Nothing to forecast.</b> ' + sel + ' is caught up; the oldest item has waited ' + D.fmtDur(v.oldest) + '.';
+    else if (f.bound) txt = '<b>More consumers will not help.</b> ' + Math.round(f.failShare * 100) + '% of attempts fail with one error, so capacity is not the limit. Fix or wait out the dependency, and consider pausing the queue so retries stop burning attempts.';
+    else if (!e0) txt = '<b>Not draining.</b> Items arrive faster than they complete, so the backlog grows by about ' + U.rate(-f.net0) + ' a minute.' + (f.extra && e1 ? ' With the what-if it clears at ' + D.clock(m + e1) + '.' : '');
+    else txt = '<b>At today\'s rate the backlog clears at ' + D.clock(m + e0) + '</b>' + (f.extra && e1 ? ', or at <b>' + D.clock(m + e1) + '</b> with the what-if (' + (e0 - e1) + ' min sooner).' : '.') +
+      (f.canRestore && !restore ? ' One consumer is silent; restarting it is the cheapest capacity you have.' : '') +
+      (v.oldest >= q.slo ? ' The oldest item is ' + D.fmtDur(v.oldest) + ' old, so the wait target stays breached until close to then.' : '');
+    $('#fcVerdict').innerHTML = txt;
+  }
+  $('#plus').addEventListener('click', function () { addN = Math.min(6, addN + 1); renderForecast(U.now()); });
+  $('#minus').addEventListener('click', function () { addN = Math.max(0, addN - 1); renderForecast(U.now()); });
+  $('#restore').addEventListener('change', function (e) { restore = e.target.checked; renderForecast(U.now()); });
+
+  /* ---------- breakdowns ---------- */
+  function batchState(b, m) {
+    var arrived = D.sum(b.arrived, 0, m);
+    var stuck = (m >= D.STUCK.min ? b.stuck : 0);
+    var dead = b.name === D.POISON.batch ? (m * 60 + 59 >= D.POISON_DEAD_S ? 1 : 0) : 0;
+    var sched = b.name === D.POISON.batch && !dead && m * 60 + 59 >= D.poisonAttempts[0].at ? 1 : 0;
+    var done = Math.min(D.sum(b.done, 0, m), arrived - stuck - dead - sched);
+    return { arrived: arrived, done: done, stuck: stuck, dead: dead, open: Math.max(0, arrived - done - stuck - dead) };
+  }
+  function renderBreakdowns(m) {
+    var bs = D.batchesOf(sel), rows = [];
+    var v = D.queueAt(sel, m);
+    if (bs.length) {
+      bs.forEach(function (b) { var st = batchState(b, m); if (st.open > 0) rows.push({ l: b.name, n: st.open, mono: true }); });
+      // the waiting count already includes in flight; scale to the waiting figure for display
+      var tot = rows.reduce(function (a, r) { return a + r.n; }, 0);
+      if (tot > v.waiting && tot) rows.forEach(function (r) { r.n = Math.round(r.n * v.waiting / tot); });
+    } else {
+      var s = D.S[sel];
+      Object.keys(s.byProducer).forEach(function (p) { rows.push({ l: 'from ' + p, n: Math.round(D.sum(s.byProducer[p], m - 14, m) / 15 * (v.waiting / Math.max(1, v.in15))) }); });
+    }
+    rows = rows.filter(function (r) { return r.n > 0; }).sort(function (a, b) { return b.n - a.n; });
+    var top = rows.length <= 6 ? rows : rows.slice(0, 5), rest = rows.slice(top.length).reduce(function (a, r) { return a + r.n; }, 0);
+    if (rest) top.push({ l: rows.length - 5 + ' other sources', n: rest, other: true });
+    var total = top.reduce(function (a, r) { return a + r.n; }, 0);
+    $('#srcTotal').textContent = total ? D.fmtNum(total) + ' total' : '';
+    var max = Math.max.apply(null, top.map(function (r) { return r.n; }).concat([1]));
+    $('#bySource').innerHTML = top.length ? top.map(function (r, i) {
+      return '<div class="bar-row' + (i === 0 ? ' hl' : ' dim') + '"><span class="lbl' + (r.mono ? ' mono' : '') + '" title="' + esc(r.l) + '">' + esc(r.l) + '</span><span class="val">' + D.fmtNum(r.n) + ' <span class="muted" style="font-weight:500">' + Math.round(r.n / total * 100) + '%</span></span>' +
+        '<span class="track"><i style="width:' + Math.max(1.5, r.n / max * 100) + '%"></i></span></div>';
+    }).join('') : '<div class="muted" style="font-size:12.5px">Nothing waiting.</div>';
+    // consumers
+    var q = D.QUEUES[D.QI[sel]], s2 = D.S[sel];
+    var cons = q.workers.map(function (id) { return { id: id, n: D.sum(s2.workerDone[id] || [], m - 14, m), stop: D.WORKERS[id].hb[m] > q.stale }; });
+    var ctot = cons.reduce(function (a, c) { return a + c.n; }, 0), cmax = Math.max.apply(null, cons.map(function (c) { return c.n; }).concat([1]));
+    $('#conTotal').textContent = D.fmtNum(ctot) + ' total';
+    $('#byConsumer').innerHTML = cons.map(function (c) {
+      return '<div class="bar-row' + (c.stop ? ' stop' : '') + '"><span class="lbl mono">' + esc(c.id) + (c.stop ? ' ' + U.badge('serious', 'STOP · silent ' + D.fmtDur(D.WORKERS[c.id].hb[m])) : '') + '</span><span class="val">' + D.fmtNum(c.n) + '</span>' +
+        '<span class="track"><i style="width:' + Math.max(c.n ? 1.5 : 0, c.n / cmax * 100) + '%"></i></span></div>';
+    }).join('');
+  }
+
+  /* ---------- files ---------- */
+  function renderFiles(m) {
+    var bs = D.batchesOf(sel).filter(function (b) { return !b.stream; });
+    if (!bs.length) { $('#filesCard').style.display = 'none'; return; }
+    $('#filesCard').style.display = '';
+    var v = D.queueAt(sel, m);
+    var rows = bs.map(function (b) { var st = batchState(b, m); st.b = b; return st; }).filter(function (st) {
+      if (!st.arrived) return false;
+      var last = -1; for (var i = m; i >= 0; i--) if (st.b.done[i]) { last = i; break; }
+      return st.open > 0 || st.stuck || st.dead || (m - last) <= 45;
+    }).sort(function (a, b) { return b.b.firstMin - a.b.firstMin; });
+    $('#filesSub').textContent = sel + ' · files with open items or finished in the last 45 minutes';
+    // FIFO by available_at: a file finishes once everything that arrived up to its last row has been taken
+    var s = D.S[sel], doneSoFar = D.sum(s.done, 0, m), etaOf = {};
+    rows.forEach(function (st) {
+      var last = st.b.firstMin; for (var i = Math.min(m, D.N - 1); i >= st.b.firstMin; i--) if (st.b.arrived[i]) { last = i; break; }
+      var ahead = Math.max(st.open, D.sum(s.arr, 0, last) - doneSoFar - v.stuck - v.dead);
+      etaOf[st.b.name] = v.out5 > 0 ? Math.max(1, Math.round(ahead / v.out5)) : null;
+    });
+    $('#files').innerHTML = '<div class="file-row head"><span>File</span><span class="c-landed">Landed</span><span class="c-rows r">Rows</span><span>Progress</span><span>State</span></div>' +
+      rows.map(function (st) {
+        var t = st.arrived, pct = function (n) { return (n / t * 100).toFixed(2) + '%'; };
+        var state;
+        if (st.open === 0 && !st.stuck && !st.dead) state = '<b>Complete</b>';
+        else if (st.open === 0 && st.stuck) state = U.badge('serious', st.stuck + ' stuck: file cannot finish');
+        else if (st.open === 0 && st.dead) state = '<b>' + D.fmtNum(st.done) + ' done</b> · ' + st.dead + ' dead, needs repair';
+        else state = '<b>' + Math.floor(st.done / t * 100) + '%</b> · clears ~' + (etaOf[st.b.name] != null ? D.clock(Math.min(D.N - 1, m + etaOf[st.b.name])) : '?') + (st.stuck ? ' · ' + st.stuck + ' stuck' : '');
+        return '<div class="file-row"><span class="file-name" title="' + esc(st.b.name) + '">' + esc(st.b.name) + '</span><span class="c-landed muted num">' + D.clock(st.b.firstMin) + '</span><span class="c-rows r">' + D.fmtNum(t) + '</span>' +
+          '<span class="prog" role="img" aria-label="' + st.done + ' done, ' + st.open + ' open, ' + st.stuck + ' stuck, ' + st.dead + ' dead">' +
+          (st.done ? '<i style="width:' + pct(st.done) + ';background:var(--s3)"></i>' : '') + (st.open ? '<i style="width:' + pct(st.open) + ';background:var(--s1)"></i>' : '') +
+          (st.stuck ? '<i style="width:max(4px,' + pct(st.stuck) + ');background:var(--serious)"></i>' : '') + (st.dead ? '<i style="width:max(4px,' + pct(st.dead) + ');background:var(--critical)"></i>' : '') + '</span>' +
+          '<span class="fstate">' + state + '</span></div>';
+      }).join('');
+  }
+
+  function render(m) { renderMap(m); renderForecast(m); renderBreakdowns(m); renderFiles(m); }
+  U.onTime(render);
+  var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { render(U.now()); }, 80); });
+  U.start();
+})();
+</script>
+</body>
+</html>

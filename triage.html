@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DBQ Triage</title>
+<script>try { var t = localStorage.getItem('dbq-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<link rel="stylesheet" href="assets/dbq.css">
+<style>
+  .hero { padding: 22px 24px 20px; }
+  .hero h1 { font-size: 26px; font-weight: 680; letter-spacing: -0.02em; line-height: 1.2; margin: 6px 0 0; max-width: 34ch; text-wrap: balance; }
+  .hero .sub { font-size: 15px; color: var(--ink-2); margin: 8px 0 0; max-width: 80ch; }
+  .hero .story { font-size: 14px; color: var(--ink-2); margin: 14px 0 0; max-width: 92ch; line-height: 1.55; }
+  .hero .story b { color: var(--ink); font-weight: 620; }
+  .hero-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin-top: 18px; border-radius: 10px; overflow: hidden; background: var(--line-2); box-shadow: 0 0 0 1px var(--line-2); }
+  .hero-stats div { background: var(--surface-2); padding: 11px 14px; min-width: 0; }
+  .hero-stats b { display: flex; align-items: center; gap: 8px; font-size: 22px; font-weight: 660; letter-spacing: -0.02em; }
+  .hero-stats b svg { width: 16px; height: 16px; display: block; }
+  .hero-stats .hs-ic { display: inline-flex; font-style: normal; }
+  .hero-stats span { font-size: 12px; color: var(--ink-3); }
+
+  .tri { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
+  .col { display: grid; gap: 16px; min-width: 0; }
+  .sec-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 4px 2px 10px; }
+  .sec-h h2 { font-size: 15px; font-weight: 660; }
+  .sec-h span { font-size: 12px; color: var(--ink-3); }
+
+  .finding { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); position: relative; overflow: hidden; }
+  .finding + .finding { margin-top: 12px; }
+  .finding::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--fc); }
+  .finding.critical { --fc: var(--critical); } .finding.serious { --fc: var(--serious); } .finding.warning { --fc: var(--warning); } .finding.info { --fc: var(--info); }
+  .f-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; width: 100%; padding: 14px 16px 14px 20px; background: none; border: 0; text-align: left; cursor: pointer; color: inherit; font: inherit; }
+  .f-head:hover { background: var(--surface-2); }
+  .f-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .f-meta { display: flex; gap: 6px 10px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--ink-3); }
+  .f-rule { font-weight: 600; color: var(--ink-2); }
+  .f-title { grid-column: 1; font-size: 15.5px; font-weight: 650; letter-spacing: -0.01em; margin: 2px 0 0; line-height: 1.35; }
+  .f-cause { grid-column: 1; font-size: 13px; color: var(--ink-2); margin: 2px 0 0; line-height: 1.5; max-width: 80ch; }
+  .f-chev { grid-column: 2; grid-row: 1 / span 3; align-self: center; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: var(--ink-3); transition: transform .15s; }
+  .f-chev svg { width: 14px; height: 14px; }
+  .finding.open .f-chev { transform: rotate(90deg); }
+  .f-body { display: none; padding: 2px 16px 16px 20px; }
+  .finding.open .f-body { display: block; }
+  .evidence { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px 20px; align-items: start; }
+  .ev-chart { min-width: 0; }
+  .ev-cap { font-size: 11.5px; color: var(--ink-3); margin: 0 0 4px; font-weight: 600; }
+  .facts { font-size: 12.5px; }
+  .facts dd { font-variant-numeric: tabular-nums; }
+  .steps { list-style: none; margin: 0; padding: 0; counter-reset: st; display: grid; gap: 10px; }
+  .steps li { counter-increment: st; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 2px 10px; font-size: 13px; line-height: 1.45; }
+  .steps li::before { content: counter(st); width: 20px; height: 20px; border-radius: 50%; background: var(--surface-3); color: var(--ink-2); font-size: 11px; font-weight: 700; display: grid; place-items: center; margin-top: 0; }
+  .steps .st-act { grid-column: 2; display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .rule-d { margin-top: 14px; border-top: 1px solid var(--line-2); padding-top: 10px; }
+  .rule-d summary { cursor: pointer; font-size: 12.5px; color: var(--ink-3); font-weight: 600; list-style: none; display: flex; gap: 6px; align-items: center; }
+  .rule-d summary::-webkit-details-marker { display: none; }
+  .rule-d summary::before { content: ""; width: 0; height: 0; border-left: 5px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform .15s; }
+  .rule-d[open] summary::before { transform: rotate(90deg); }
+  .rule-d p { font-size: 12.5px; color: var(--ink-2); margin: 8px 0; max-width: 80ch; }
+  .rule-d .sql { margin: 0; }
+  .f-links { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px; }
+  .all-clear { padding: 28px 20px; text-align: center; color: var(--ink-2); }
+  .all-clear svg { width: 28px; height: 28px; color: var(--good); }
+
+  .search { display: flex; gap: 8px; }
+  .search .input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12.5px; }
+  .tries { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: var(--ink-3); align-items: center; }
+  .tries button { font: inherit; font-family: var(--mono); font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 0; background: var(--surface-3); color: var(--ink-2); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tries button:hover { color: var(--ink); }
+  .result { margin-top: 14px; }
+  .result-h { display: flex; gap: 8px 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 10px; }
+  .result-h b { font-family: var(--mono); font-size: 15px; }
+  .file-prog { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--surface-3); gap: 2px; margin: 8px 0 10px; }
+  .file-prog i { display: block; height: 100%; }
+
+  .fps { display: grid; gap: 14px; }
+  .fp-group h3 { font-size: 12.5px; font-weight: 650; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .fp-group h3 span { font-weight: 500; color: var(--ink-3); font-size: 12px; }
+  .fp { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 8px 0 0; font-size: 12px; }
+  .fp code { font-size: 11.5px; overflow-wrap: anywhere; color: var(--ink); }
+  .fp .n { font-weight: 650; font-variant-numeric: tabular-nums; text-align: right; }
+  .fp .w { grid-column: 1 / -1; color: var(--ink-3); font-size: 11.5px; }
+  .fp-none { font-size: 12px; color: var(--ink-3); padding-top: 6px; }
+
+  .tl { list-style: none; margin: 0; padding: 0; }
+  .tl li { display: grid; grid-template-columns: 62px 12px minmax(0, 1fr); gap: 0 10px; position: relative; }
+  .tl button { all: unset; display: contents; cursor: pointer; }
+  .tl .tt { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); padding-top: 2px; text-align: right; }
+  .tl .tdot { position: relative; }
+  .tl .tdot::before { content: ""; position: absolute; left: 5px; top: 10px; bottom: -4px; width: 2px; background: var(--line); }
+  .tl li:last-child .tdot::before { display: none; }
+  .tl .tdot i { position: absolute; left: 1px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--axis)); }
+  .tl .tx { padding-bottom: 12px; font-size: 12.5px; min-width: 0; }
+  .tl .tx b { font-weight: 600; display: block; }
+  .tl .tx span { color: var(--ink-3); font-size: 12px; overflow-wrap: anywhere; }
+  .tl li:hover .tx b { color: var(--accent-ink); }
+  .tl li.now .tt { color: var(--accent-ink); font-weight: 650; }
+
+  .slo-rows { display: grid; gap: 10px; }
+  .slo-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) 210px; gap: 6px 16px; align-items: center; }
+  .slo-name { font-family: var(--mono); font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cells { display: grid; grid-template-columns: repeat(48, minmax(0, 1fr)); gap: 2px; height: 22px; }
+  .cells i { border-radius: 2px; background: var(--good); opacity: .85; }
+  .cells i.w { background: var(--warning); opacity: 1; }
+  .cells i.c { background: var(--critical); opacity: 1; }
+  .cells i.f { background: transparent; box-shadow: inset 0 0 0 1px var(--line); opacity: 1; }
+  .slo-stat { font-size: 12px; color: var(--ink-3); }
+  .slo-stat b { color: var(--ink); font-weight: 650; }
+  .slo-axis { display: grid; grid-template-columns: 150px minmax(0, 1fr) 210px; gap: 16px; font-size: 10.5px; color: var(--axis-ink); }
+  .slo-axis div { display: flex; justify-content: space-between; }
+
+  @media (max-width: 1060px) {
+    .tri { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 760px) {
+    .hero { padding: 18px 16px 16px; }
+    .hero h1 { font-size: 21px; }
+    .hero .sub { font-size: 14px; }
+    .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .evidence { grid-template-columns: minmax(0, 1fr); }
+    .f-head { padding: 12px 12px 12px 16px; }
+    .f-body { padding: 2px 12px 14px 16px; }
+    .slo-row { grid-template-columns: minmax(0, 1fr) auto; }
+    .slo-row .cells { grid-column: 1 / -1; grid-row: 2; gap: 1px; height: 18px; }
+    .slo-axis { grid-template-columns: minmax(0, 1fr); }
+    .slo-axis > span { display: none; }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+  <section class="card hero" aria-live="polite">
+    <div class="eyebrow" id="heroEyebrow"></div>
+    <h1 id="headline"></h1>
+    <p class="sub" id="subline"></p>
+    <p class="story" id="story"></p>
+    <div class="hero-stats" id="heroStats"></div>
+  </section>
+
+  <div class="tri">
+    <div class="col">
+      <section aria-label="Findings">
+        <div class="sec-h"><h2>What is wrong, most urgent first</h2><span>rules evaluated every minute against the queue tables</span></div>
+        <div id="findings"></div>
+      </section>
+    </div>
+    <div class="col">
+      <section class="card" aria-label="Find an item">
+        <div class="card-h"><h2 class="card-t">Where is my item?</h2><span class="card-sub">id, payment reference or file name</span></div>
+        <div class="card-b">
+          <form class="search" id="searchForm" role="search">
+            <input class="input" id="q" type="search" placeholder="#88120473 or PAY-DEMO-…" aria-label="Item id, reference or file name" autocomplete="off" spellcheck="false">
+            <button class="btn" type="submit">Find</button>
+          </form>
+          <div class="tries" id="tries"></div>
+          <div class="result" id="result"></div>
+        </div>
+      </section>
+      <section class="card" aria-label="Errors by kind">
+        <div class="card-h"><h2 class="card-t">Errors by kind, last 60 min</h2></div>
+        <div class="card-b"><div class="fps" id="fps"></div>
+          <p class="footnote" style="margin-top:14px">Kind is inferred: the same item failing the same way on different consumers is <b>data</b>; many items failing with one error in a burst is a <b>dependency</b>; failures that pass on retry are <b>transient</b>.</p></div>
+      </section>
+      <section class="card" aria-label="Timeline">
+        <div class="card-h"><h2 class="card-t">What happened today</h2><span class="spacer"></span><button class="btn sm" id="pmBtn" type="button">Draft incident notes</button></div>
+        <div class="card-b"><ol class="tl" id="tl"></ol></div>
+      </section>
+    </div>
+  </div>
+
+  <section class="card" style="margin-top:16px" aria-label="Wait target today">
+    <div class="card-h"><h2 class="card-t">Wait target, today</h2><span class="card-sub">each cell is 10 minutes. Budget: within target 99% of an 8-hour day, so 4.8 minutes past target per queue</span></div>
+    <div class="card-b">
+      <div class="slo-rows" id="slo"></div>
+      <div class="slo-axis" style="margin-top:6px"><span></span><div id="sloAxis"></div><span></span></div>
+      <div class="legend" style="margin-top:12px"><span><i style="background:var(--good)"></i>Within target</span><span><i style="background:var(--warning)"></i>Past two thirds of target</span><span><i style="background:var(--critical)"></i>Past target</span><span><i style="background:transparent;box-shadow:inset 0 0 0 1px var(--line)"></i>Not yet</span></div>
+    </div>
+  </section>
+  <p class="footnote" style="margin-top:20px">Concept C of three. A page for whoever is on call or in payments operations, written as sentences rather than charts: what is wrong, why the console thinks so, and the next safe step. Every finding is a plain SQL rule over the queue tables, shown under "How this was detected". Inspired by Hangfire's "looks like the job was aborted", GoodJob's errors grouped by class, and Burrow's evaluation rules.</p>
+</main>
+
+<script src="assets/sim.js"></script>
+<script src="assets/ui.js"></script>
+<script>
+(function () {
+  'use strict';
+  var D = window.DBQ, U = window.DBQUI, esc = U.esc, $ = U.$, $$ = U.$$;
+  U.mountChrome({ page: 'triage', subtitle: 'Concept C · Triage' });
+
+  var CHEV = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var open = null;          // ids of expanded findings; seeded with the top two on first render
+  var query = '';
+
+  function kindOf(f) { return f.id.split(':')[0]; }
+  function words(n) { return ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'][n] || String(n); }
+  function durWords(s) {
+    s = Math.round(s);
+    if (s < 60) return s + ' seconds';
+    var mi = Math.round(s / 60);
+    if (mi < 60) return mi + (mi === 1 ? ' minute' : ' minutes');
+    var h = Math.floor(mi / 60), r = mi % 60;
+    return h + (h === 1 ? ' hour' : ' hours') + (r ? ' ' + r + (r === 1 ? ' minute' : ' minutes') : '');
+  }
+  function targetWords(s) { var mi = Math.round(s / 60); return mi < 60 ? mi + '-minute' : Math.round(mi / 60) + '-hour'; }
+  var SEV = { critical: 'Urgent', serious: 'Action needed', warning: 'Watch', info: 'Info' };
+  function link(page, m, q) { return page + '#t=' + encodeURIComponent(D.clock(m)) + (q ? '&q=' + encodeURIComponent(q) : ''); }
+
+  /* ---------- per-batch state (for cause attribution and file lookups) ---------- */
+  function batchState(b, m) {
+    var arrived = D.sum(b.arrived, 0, m);
+    var stuck = m >= D.STUCK.min ? b.stuck : 0;
+    var dead = b.name === D.POISON.batch && m * 60 + 59 >= D.POISON_DEAD_S ? 1 : 0;
+    var sched = b.name === D.POISON.batch && !dead && m * 60 + 59 >= D.poisonAttempts[0].at ? 1 : 0;
+    var done = Math.min(D.sum(b.done, 0, m), arrived - stuck - dead - sched);
+    return { arrived: arrived, done: Math.max(0, done), stuck: stuck, dead: dead, open: Math.max(0, arrived - done - stuck - dead) };
+  }
+  function topSource(qname, m) {
+    var rows = D.batchesOf(qname).map(function (b) { return { b: b, open: batchState(b, m).open }; }).filter(function (r) { return r.open > 0; });
+    var tot = rows.reduce(function (a, r) { return a + r.open; }, 0);
+    rows.sort(function (a, b) { return b.open - a.open; });
+    return rows.length ? { b: rows[0].b, share: rows[0].open / tot } : null;
+  }
+  function failShare(qname, m) {
+    var s = D.S[qname], f = D.sum(s.fail, m - 4, m), d = D.sum(s.done, m - 4, m);
+    return f / Math.max(1, f + d);
+  }
+  function topFp(qname, m, win) {
+    var s = D.S[qname], best = null, tot = 0;
+    Object.keys(s.failFp).forEach(function (k) { var n = D.sum(s.failFp[k], m - win + 1, m); tot += n; if (!best || n > best.n) best = { k: k, n: n }; });
+    return best && best.n ? { k: best.k, n: best.n, share: best.n / Math.max(1, tot), fp: D.FP[best.k] } : null;
+  }
+  function silentWorkers(qname, m) {
+    var q = D.QUEUES[D.QI[qname]];
+    return q.workers.filter(function (id) { return D.WORKERS[id].hb[m] > q.stale; });
+  }
+
+  /* ---------- guarded actions ---------- */
+  var ACT = {
+    release: function (m) {
+      var tot = 0; Object.keys(D.STUCK.claims).forEach(function (k) { tot += D.STUCK.claims[k]; });
+      U.guarded({ queue: Object.keys(D.STUCK.claims).join(', '), title: 'Release ' + tot + ' claims held by ' + D.STUCK.worker, n: tot, cta: 'Request release',
+        explain: 'Puts the items back to waiting, at the front of the line where they were, so a healthy consumer takes them next. Only rows whose heartbeat is still stale when the update runs are touched. If ' + D.STUCK.worker + ' wakes up later, its completions change nothing, because completing requires still holding the claim.',
+        sql: "-- short form of sql/panels.sql P17b (the full one also checks dbq_worker)\nUPDATE dbq_item i\n   SET status = 'QUEUED', claimed_by = NULL,\n       claimed_at = NULL, heartbeat_at = NULL\n  FROM dbq_queue_config c\n WHERE c.queue_name = i.queue_name\n   AND i.claimed_by = 'mmp-app-03:4211'\n   AND i.status IN ('CLAIMED', 'PROCESSING')\n   AND i.heartbeat_at < NOW() - c.stale_after_s * INTERVAL '1 second'\n-- available_at is untouched, so items keep their place in line\nRETURNING i.id, i.queue_name;"});
+    },
+    pause: function (m, f) {
+      U.guarded({ queue: f.queue, title: 'Pause consuming ' + f.queue, n: D.S[f.queue].waiting[m] + D.S[f.queue].sched[m], nLabel: 'items waiting or in backoff', cta: 'Request pause',
+        explain: 'Consumers stop claiming new items and claims in progress finish. Producers keep writing, so the backlog grows, but items stop burning attempts against a dependency that is down. Unpause when the dependency recovers.',
+        sql: "UPDATE dbq_queue_config\n   SET paused = TRUE\n WHERE queue_name = '" + f.queue + "';\n-- only works because every consumer's claim query checks paused\n-- (sql/panels.sql CONTEXT); the audit row records who and why"});
+    },
+    retryDead: function (m, f) {
+      var n = D.S['ledger.postings'].dead[m];
+      U.guarded({ queue: 'ledger.postings', title: 'Retry ' + D.fmtNum(n) + ' dead postings', n: n, cta: 'Request retry',
+        warn: m < D.STORM.to ? 'cbs-gateway is still timing out. Retrying now will send these straight back to dead.' : null,
+        explain: 'Selects dead postings by their error fingerprint, not by hand, and gives them a fresh set of attempts, in batches of 500 spaced 200 ms apart. Safe because every one of them failed on a gateway timeout before the ledger wrote anything.',
+        sql: "-- short form of sql/panels.sql P17d: 500 at a time, 200 ms apart,\n-- so the gateway that just recovered is not stampeded\nWITH pick AS (\n  SELECT id, completed_at FROM dbq_item\n   WHERE queue_name = 'ledger.postings'\n     AND status = 'DEAD'\n     AND completed_at >= NOW() - INTERVAL '2 hours'\n     AND dbq_fingerprint(last_error) = :cbs_timeout_fingerprint\n   ORDER BY completed_at\n   LIMIT 500\n   FOR UPDATE SKIP LOCKED\n), staggered AS (\n  SELECT id, ROW_NUMBER() OVER (ORDER BY completed_at, id) AS n\n    FROM pick)\nUPDATE dbq_item i\n   SET status = 'QUEUED', attempts = 0, completed_at = NULL,\n       available_at = NOW() + s.n * INTERVAL '200 milliseconds'\n  FROM staggered s\n WHERE i.id = s.id\nRETURNING i.id;\n-- the full form writes the audit row in the same statement"});
+    },
+    retryPoison: function (m) {
+      U.guarded({ queue: 'payments.inbound', title: 'Retry #' + D.POISON.id, n: 1, cta: 'Request retry',
+        warn: 'This item failed ten times with the same validation error. Retrying fails again unless the source row was repaired.',
+        explain: 'Makes the item claimable immediately with a fresh set of attempts.',
+        sql: "UPDATE dbq_item\n   SET status = 'QUEUED', attempts = 0, available_at = NOW(),\n       completed_at = NULL\n WHERE id = " + D.POISON.id + "\n   AND status = 'DEAD'\nRETURNING id;"});
+    },
+    discardPoison: function (m) {
+      U.guarded({ queue: 'payments.inbound', title: 'Cancel #' + D.POISON.id + ', repaired elsewhere', n: 1, danger: true, cta: 'Request cancel',
+        explain: 'Marks the item as handled outside the queue, for example when payments operations re-key the payment by hand. MMP will never process it.',
+        sql: "UPDATE dbq_item\n   SET status = 'CANCELLED', completed_at = NOW()\n WHERE id = " + D.POISON.id + "\n   AND status IN ('QUEUED', 'FAILED', 'DEAD')\nRETURNING id;\n-- consumers never claim CANCELLED; the reason goes to dbq_action_audit"});
+    },
+    find: function (m, f, arg) { $('#q').value = arg; query = arg; renderSearch(U.now()); $('#q').scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  };
+  function btn(label, act, arg, cls) { return '<button class="btn sm' + (cls ? ' ' + cls : '') + '" type="button" data-act="' + act + '"' + (arg ? ' data-arg="' + esc(arg) + '"' : '') + '>' + esc(label) + '</button>'; }
+
+  /* ---------- explain each finding in plain words ---------- */
+  function explain(f, m) {
+    var k = kindOf(f), q = D.QUEUES[D.QI[f.queue]], s = D.S[f.queue], v = D.queueAt(f.queue, m);
+    var from = Math.max(0, m - 150), x = { k: k };
+    if (k === 'slo') {
+      var src = topSource(f.queue, m), silent = silentWorkers(f.queue, m), fs = failShare(f.queue, m), parts = [];
+      if (fs > 0.5) {
+        var tf = topFp(f.queue, m, 5);
+        x.cause = 'Items are picked up quickly, but ' + Math.round(fs * 100) + '% of attempts fail' + (tf ? ' with ' + tf.fp.key.split(':')[0] : '') + ', so they sit in retry backoff instead of finishing.';
+        x.selfHeal = false;
+      } else {
+        if (src && src.share >= 0.5) parts.push(Math.round(src.share * 100) + '% of the backlog is one file, <span class="mono">' + esc(src.b.name) + '</span>, which landed at ' + D.clock(src.b.firstMin));
+        if (silent.length) parts.push(words(silent.length).toLowerCase() + ' of ' + words(q.workers.length).toLowerCase() + ' consumers has been silent since ' + D.clock(D.STUCK.min) + ', so capacity is down ' + Math.round(silent.length / q.workers.length * 100) + '%');
+        x.cause = (parts.length ? parts.join(', and ') + '. ' : '') + (v.etaMin ? 'It is draining at ' + U.rate(v.out5) + ' a minute and should clear around <b>' + D.clock(Math.min(D.N - 1, m + v.etaMin)) + '</b>.' : 'It is not draining yet.');
+        x.cause = x.cause.charAt(0).toUpperCase() + x.cause.slice(1);
+        x.selfHeal = !!v.etaMin;
+        x.story = (src && src.share >= 0.5 ? 'A ' + D.fmtNum(src.b.total) + '-row file landed at ' + D.clock(src.b.firstMin) : 'More work arrived than usual') +
+          (silent.length ? ' while ' + words(silent.length).toLowerCase() + ' of ' + words(q.workers.length).toLowerCase() + ' ' + q.consumer + ' consumers was silent' : '') + ', so ' + f.queue + ' fell behind' +
+          (v.etaMin ? '; it should be back within target around <b>' + D.clock(Math.min(D.N - 1, m + v.etaMin)) + '</b>.' : '.');
+      }
+      x.chart = { cap: 'Oldest waiting item, against the ' + D.fmtDur(q.slo) + ' target', opts: { height: 130, from: from, to: m, series: [{ label: 'oldest waiting', color: 'var(--s1)', values: s.oldest, kind: 'area' }],
+        threshold: { value: q.slo, label: 'target' }, durationAxis: true, yFmt: function (val) { return val ? D.fmtDur(val) : '0'; }, band: { from: f.sinceM, to: m } } };
+      x.facts = [['Waiting', D.fmtNum(v.waiting)], ['Oldest', D.fmtDur(v.oldest) + ' (target ' + D.fmtDur(q.slo) + ')'], ['Arriving', U.rate(v.in5) + '/min'], ['Completing', U.rate(v.out5) + '/min'],
+        ['Consumers', (q.workers.length - silent.length) + ' of ' + q.workers.length + ' heartbeating']];
+      if (src && fs <= 0.5) x.facts.push(['Biggest source', '<span class="mono">' + esc(src.b.name) + '</span>']);
+      x.rule = 'Fires when the oldest claimable item is older than the queue\'s wait target. It uses age, not count: 20,000 items are fine if the oldest is seconds old, and two items are not fine if one has waited an hour.';
+      x.sql = "-- short form of sql/panels.sql P2\nSELECT c.queue_name,\n       EXTRACT(EPOCH FROM NOW() - MIN(i.available_at)) AS oldest_wait_s,\n       c.slo_wait_s\n  FROM dbq_queue_config c\n  JOIN dbq_item i ON i.queue_name = c.queue_name\n WHERE i.status IN ('QUEUED', 'FAILED')\n   AND i.available_at <= NOW()   -- claimable now; backoff is counted apart\n GROUP BY c.queue_name, c.slo_wait_s\nHAVING MIN(i.available_at) < NOW() - c.slo_wait_s * INTERVAL '1 second';";
+      x.steps = fs > 0.5 ? [{ t: 'This is a symptom of the retry storm below; deal with that first.' }]
+        : [silent.length ? { t: 'Get the silent consumer back. Ask the platform team to restart <span class="mono">' + esc(silent[0]) + '</span>, then release the claims it still holds.', a: btn('Release its claims…', 'release') } : null,
+           { t: v.etaMin ? 'Otherwise leave it: the backlog is shrinking by about ' + U.rate(v.net) + ' a minute. Tell payments operations to expect late postings until about ' + D.clock(Math.min(D.N - 1, m + v.etaMin)) + '.' : 'Add consumers or find out why completions are slow.' },
+           src && src.share >= 0.5 ? { t: 'Next time: ask AIS to send bulk files at a lower <span class="mono">priority</span>, so the 15-minute files are not stuck behind them.' } : null].filter(Boolean);
+      x.links = [['See the drain forecast', link('flow.html', m, f.queue)], ['Open in the control room', link('console.html', m, f.queue)]];
+    } else if (k === 'storm') {
+      var tf2 = topFp(f.queue, m, 5), items = Math.round(D.sum(s.fail, m - 4, m) * 0.8);
+      x.story = 'Separately, cbs-gateway is timing out, so ' + f.queue + ' fails ' + U.rate(v.fail5) + ' times a minute and has dead-lettered ' + D.fmtNum(v.dead) + ' postings.';
+      x.cause = 'Not the data. ' + Math.round((tf2 ? tf2.share : 1) * 100) + '% of failures are the same <b>' + esc(tf2 ? tf2.fp.key.split(':')[0] : 'error') + '</b> on cbs-gateway, spread over thousands of different items. Adding consumers or retrying faster will not help.';
+      x.selfHeal = false;
+      x.chart = { cap: 'Attempts per minute on ' + f.queue, opts: { height: 130, from: Math.max(0, m - 90), to: m, series: [{ label: 'Failed', color: 'var(--critical)', values: s.fail }, { label: 'Completed', color: 'var(--s3)', values: s.done }],
+        tipFmt: function (val) { return D.fmtNum(val) + '/min'; }, endDot: false }, legend: [['var(--critical)', 'Failed'], ['var(--s3)', 'Completed']] };
+      x.facts = [['Failures', U.rate(v.fail5) + '/min'], ['Completed', U.rate(v.out5) + '/min'], ['One fingerprint', Math.round((tf2 ? tf2.share : 1) * 100) + '% of failures'], ['Error kind', 'dependency'], ['Dead so far', D.fmtNum(v.dead)], ['Since', D.clock(f.sinceM)]];
+      x.rule = 'Fires when failures per minute over the last ten minutes are at least ten times the queue\'s normal (the three-hour median) and at least five, spread over at least 20 items, with one normalised error behind 80% or more of them. Many items with one error means a dependency; one item with many errors is a poison message.';
+      x.sql = "-- short form of sql/panels.sql P11\nSELECT queue_name,\n       COUNT(*) AS failed_10m,\n       COUNT(DISTINCT item_id) AS items_10m,\n       MODE() WITHIN GROUP (ORDER BY dbq_fingerprint(error)) AS top_error\n  FROM dbq_attempt\n WHERE outcome = 'FAILED'\n   AND finished_at > NOW() - INTERVAL '10 minutes'\n GROUP BY queue_name;\n-- storm when: failures/min >= 10x the 3-hour median from dbq_snapshot,\n-- at least 20 items, and the top error explains 80% or more";
+      x.steps = [{ t: 'Tell the owner of cbs-gateway (core banking platform). The sample error is <span class="mono">' + esc(D.FP.cbs.sample) + '</span>.' },
+        { t: 'Pause consuming ' + f.queue + ' so retries stop burning attempts and dead-lettering postings.', a: btn('Pause ' + f.queue + '…', 'pause') },
+        { t: 'When the gateway is back, unpause and retry the dead postings in one go (see the dead letters finding).' }];
+      x.links = [['Open in the control room', link('console.html', m, f.queue)]];
+    } else if (k === 'stuck') {
+      var w = D.WORKERS[D.STUCK.worker], tot = f.metric;
+      x.cause = '<span class="mono">' + esc(D.STUCK.worker) + '</span> (pid ' + D.STUCK.pid + ') stopped heartbeating at ' + D.clock(D.STUCK.min, D.STUCK.sec) + ' while holding ' + f.queues.map(function (h) { return h.n + ' ' + h.queue.split('.')[0]; }).join(' and ') + '. Other consumers cannot see these items, and nothing in this queue design hands them back on its own.';
+      x.selfHeal = false;
+      x.story = '<span class="mono">' + esc(D.STUCK.worker) + '</span> has held ' + tot + ' claims without a heartbeat since ' + D.clock(D.STUCK.min) + ', and only a person can release them.';
+      x.chart = { cap: 'Seconds since ' + D.STUCK.worker + ' last heartbeat', opts: { height: 130, from: Math.max(0, D.STUCK.min - 30), to: m, series: [{ label: 'heartbeat age', color: 'var(--serious)', values: w.hb, kind: 'area' }],
+        threshold: { value: 90, label: 'stale after 90s' }, durationAxis: true, yFmt: function (val) { return val ? D.fmtDur(val) : '0'; } } };
+      x.facts = [['Consumer', '<span class="mono">' + esc(D.STUCK.worker) + ':' + D.STUCK.pid + '</span>'], ['Last heartbeat', D.clock(D.STUCK.min, D.STUCK.sec)], ['Silent for', D.fmtDur(w.hb[m])]]
+        .concat(f.queues.map(function (h) { return ['Claims in ' + h.queue.split('.')[0], String(h.n)]; }))
+        .concat([['Upstream file', '<span class="mono">DEMO_FPS_20261015_1030.csv</span> cannot finish']]);
+      x.rule = 'Fires when a claim\'s heartbeat is older than the queue\'s stale_after_s. Counts alone never show this: the items are not waiting, so a depth chart looks healthy. Solid Queue and Hangfire both learned this the hard way.';
+      x.sql = "-- short form of sql/panels.sql P8b\nSELECT i.queue_name, i.claimed_by, COUNT(*) AS stuck_claims,\n       MAX(i.heartbeat_at) AS last_heartbeat_at\n  FROM dbq_item i\n  JOIN dbq_queue_config c ON c.queue_name = i.queue_name\n WHERE i.status IN ('CLAIMED', 'PROCESSING')\n   AND COALESCE(i.heartbeat_at, i.claimed_at)\n       < NOW() - c.stale_after_s * INTERVAL '1 second'\n GROUP BY i.queue_name, i.claimed_by;";
+      x.steps = [{ t: 'Ask the platform team to restart <span class="mono">' + esc(D.STUCK.worker) + '</span> or kill pid ' + D.STUCK.pid + ', so it cannot wake up and finish items twice.' },
+        { t: 'Release its ' + tot + ' claims back to the queue. The update only touches rows that are still stale.', a: btn('Release ' + tot + ' claims…', 'release') },
+        { t: 'Next time: give claims a lease (claimed_at plus a timeout) so they return on their own, and alert on heartbeat age, not on depth.' }];
+      x.links = [['See one of the stuck items', '#find:PAY-DEMO-1030-0412'], ['Open consumers in the control room', link('console.html', m, f.queue)]];
+    } else if (k === 'poison') {
+      var pa = D.poisonAttempts.filter(function (a) { return a.at <= m * 60 + 59; });
+      var ws = {}; pa.forEach(function (a) { ws[a.worker] = 1; });
+      var dead = m * 60 + 59 >= D.POISON_DEAD_S;
+      x.cause = words(pa.length) + ' attempts on ' + words(Object.keys(ws).length).toLowerCase() + ' different consumers, and the same validation error every time: <span class="mono">creditor IBAN checksum invalid</span>. The row is wrong, not a consumer, so retrying will never work.' + (dead ? '' : ' It will be dead-lettered after attempt 10.');
+      x.selfHeal = false;
+      x.story = 'Payment #' + D.POISON.id + ' has bad data' + (dead ? ' and is dead after ten attempts.' : ' and keeps failing.');
+      x.attempts = pa;
+      x.facts = [['Item', '<span class="mono">#' + D.POISON.id + '</span>'], ['Reference', '<span class="mono">' + esc(D.POISON.ref) + '</span>'], ['Source', 'row ' + D.POISON.row + ' of <span class="mono">' + esc(D.POISON.batch) + '</span>'],
+        ['Attempts', pa.length + ' of 10'], ['Status', dead ? 'dead since ' + U.clockS(D.POISON_DEAD_S) : 'retry scheduled'], ['Error kind', 'data (deterministic)']];
+      x.rule = 'Fires when one item has failed three or more times with one normalised error on two or more consumers, and at most three items hit that error in the last day. Different consumers rule out a bad host; the rarity of the error rules out a retry storm.';
+      x.sql = "-- short form of sql/panels.sql P9\nSELECT a.item_id,\n       COUNT(*) AS failures,\n       COUNT(DISTINCT a.worker) AS consumers,\n       MIN(dbq_fingerprint(a.error)) AS error\n  FROM dbq_attempt a\n WHERE a.outcome = 'FAILED'\n GROUP BY a.item_id\nHAVING COUNT(*) >= 3\n   AND COUNT(DISTINCT dbq_fingerprint(a.error)) = 1\n   AND COUNT(DISTINCT a.worker) >= 2;\n-- poison only if 3 or fewer items failed with that error in 24 hours;\n-- otherwise it is a storm victim, not bad data";
+      x.steps = [{ t: 'Send the payment to payments operations to fix the creditor IBAN in row ' + D.POISON.row + ' of the BACS file. The SQL above gives them the reference.' },
+        { t: dead ? 'After the fix, retry it, or cancel it if they re-keyed the payment by hand.' : 'Consider moving it to dead now rather than waiting for the remaining attempts.', a: btn('Retry after fix…', 'retryPoison') + btn('Cancel, repaired by hand…', 'discardPoison', null, 'ghost') }];
+      x.links = [['Trace this item', '#find:' + D.POISON.id]];
+    } else if (k === 'spike') {
+      var a10 = D.sum(s.arr, m - 9, m);
+      x.cause = 'AIS wrote ' + D.fmtNum(a10) + ' items in ten minutes from <span class="mono">' + esc(D.BULK.name) + '</span>. This is real work, not a fault; it explains the backlog above.';
+      x.selfHeal = true;
+      x.chart = { cap: 'Items written to ' + f.queue + ' per minute', opts: { height: 130, from: Math.max(0, m - 120), to: m, series: [{ label: 'Arrived', color: 'var(--s1)', values: s.arr }], tipFmt: function (val) { return D.fmtNum(val) + '/min'; }, endDot: false } };
+      x.facts = [['Producer', 'AIS'], ['File', '<span class="mono">' + esc(D.BULK.name) + '</span>'], ['Rows', D.fmtNum(D.BULK.rows)], ['Written', D.clock(D.BULK.from) + ' to ' + D.clock(D.BULK.to)]];
+      x.rule = 'Fires when a queue receives more than three times its busiest same hour of the previous seven days. Grouping arrivals by batch_ref names the file.';
+      x.sql = "-- short form of sql/panels.sql P12 and P12b\nSELECT producer, batch_ref, COUNT(*) AS arrived_60m\n  FROM dbq_item\n WHERE queue_name = 'payments.inbound'\n   AND created_at > NOW() - INTERVAL '60 minutes'\n GROUP BY producer, batch_ref\n ORDER BY arrived_60m DESC;\n-- spike when the last hour is over 3x the busiest same hour of the past 7 days";
+      x.steps = [{ t: 'Nothing to do now. Watch the wait-time finding instead.' }];
+      x.links = [['Follow the file', '#find:' + D.BULK.name]];
+    } else if (k === 'dead') {
+      var n = f.metric;
+      x.cause = 'All ' + D.fmtNum(n) + ' failed five times on the cbs-gateway timeout. ' + (m >= D.STORM.to ? 'The gateway recovered at ' + D.clock(D.STORM.to) + ', so a retry by fingerprint is safe.' : 'Wait until the gateway recovers, then retry them together.');
+      x.selfHeal = false;
+      x.chart = { cap: 'Dead postings in ledger.postings', opts: { height: 130, from: Math.max(0, D.STORM.from - 20), to: m, series: [{ label: 'dead', color: 'var(--ink-3)', values: s.dead, kind: 'area' }], tipFmt: function (val) { return D.fmtNum(val); } } };
+      x.facts = [['Dead postings', D.fmtNum(n)], ['Error', 'SocketTimeoutException (cbs-gateway)'], ['Gateway', m >= D.STORM.to ? 'recovered ' + D.clock(D.STORM.to) : 'still failing'], ['Money impact', 'postings not on the ledger']];
+      x.rule = 'Groups dead items by their normalised error fingerprint (quoted values, UUIDs and numbers masked), so a whole group can be retried with one guarded update instead of row by row.';
+      x.sql = "-- short form of sql/panels.sql P10\nSELECT queue_name, dbq_fingerprint(last_error) AS error,\n       COUNT(*) AS dead, MIN(id) AS sample_item\n  FROM dbq_item\n WHERE status = 'DEAD'\n GROUP BY queue_name, dbq_fingerprint(last_error)\n ORDER BY dead DESC;";
+      x.steps = [{ t: m >= D.STORM.to ? 'Retry all of them in one guarded update, selected by fingerprint.' : 'Do not retry yet: the gateway is still failing.', a: btn('Retry ' + D.fmtNum(n) + ' dead postings…', 'retryDead') },
+        { t: 'Tell finance operations which postings were late; the incident notes list the window.' }];
+      x.links = [['Trace one posting', '#find:POST-DEMO-55102399']];
+    }
+    return x;
+  }
+
+  /* ---------- hero ---------- */
+  function needsPerson(k) { return k === 'stuck' || k === 'poison' || k === 'dead' || k === 'storm'; }
+  function lastAllClear(m) {
+    for (var i = m; i >= 0; i--) if (!D.findingsAt(i).some(function (f) { return f.sev !== 'info'; })) return i;
+    return null;
+  }
+  function renderHero(m, fs, ex) {
+    var slo = fs.filter(function (f) { return kindOf(f) === 'slo' && f.sev === 'critical'; });
+    var people = fs.filter(function (f) { return needsPerson(kindOf(f)); });
+    var self = fs.filter(function (f) { return ex[f.id].selfHeal; });
+    $('#heroEyebrow').textContent = 'Triage at ' + D.clock(m) + ' · ' + D.DATE_LABEL;
+    var h, sub = [];
+    if (slo.length) {
+      var w = slo[0];
+      h = w.queue + ' is ' + durWords(w.v.oldest) + ' behind its ' + targetWords(w.v.q.slo) + ' target.';
+      if (slo.length > 1) sub.push(slo.slice(1).map(function (f) { return f.queue; }).join(' and ') + (slo.length > 2 ? ' are' : ' is') + ' also late.');
+    } else if (people.length) h = 'Every queue is within its wait target, but something needs a person.';
+    else h = fs.length ? 'Busy, but healthy. Nothing needs a person.' : 'All quiet. Every queue is within its wait target.';
+    if (people.length) sub.push(words(people.length) + (people.length === 1 ? ' thing needs' : ' things need') + ' a person' + (self.length ? '; ' + words(self.length).toLowerCase() + ' will clear on ' + (self.length === 1 ? 'its' : 'their') + ' own.' : '.'));
+    $('#headline').textContent = h;
+    $('#subline').textContent = sub.join(' ');
+    // the story leads with the headline queue, then the other causes in the order a person would explain them
+    var order = ['slo', 'storm', 'stuck', 'poison', 'dead'], story = [];
+    order.forEach(function (k) {
+      var f = fs.filter(function (x) { return kindOf(x) === k && ex[x.id].story; })[0];
+      if (f && story.length < 3) story.push(ex[f.id].story);
+    });
+    $('#story').innerHTML = story.join(' ');
+    $('#story').style.display = story.length ? '' : 'none';
+    var lac = lastAllClear(m);
+    // severity icons draw a white glyph on currentColor, so give each one its severity colour (text colour is white in dark mode)
+    function hsIcon(sev) { return '<i class="hs-ic" style="color:var(--' + sev + ')">' + U.ICON[sev] + '</i>'; }
+    $('#heroStats').innerHTML =
+      '<div><b>' + hsIcon(people.length ? 'serious' : 'good') + people.length + '</b><span>need a person</span></div>' +
+      '<div><b>' + hsIcon(slo.length ? 'critical' : 'good') + slo.length + '</b><span>' + (slo.length === 1 ? 'queue' : 'queues') + ' past target</span></div>' +
+      '<div><b>' + hsIcon(self.length ? 'info' : 'good') + self.length + '</b><span>will clear on ' + (self.length === 1 ? 'its' : 'their') + ' own</span></div>' +
+      '<div><b>' + (lac === m ? 'now' : lac == null ? 'before 07:00' : D.clock(lac)) + '</b><span>last all clear</span></div>';
+  }
+
+  /* ---------- findings ---------- */
+  function attemptsStrip(pa) {
+    var W = 320, H = 54, t0 = D.poisonAttempts[0].at - 300, t1 = D.POISON_DEAD_S + 300;
+    var X = function (t) { return 10 + (W - 20) * (t - t0) / (t1 - t0); };
+    var o = '<line x1="10" x2="' + (W - 10) + '" y1="24" y2="24" stroke="var(--line)" stroke-width="2"/>';
+    pa.forEach(function (a, i) {
+      o += '<g><circle cx="' + X(a.at) + '" cy="24" r="6" fill="var(--critical)" stroke="var(--surface)" stroke-width="2"/><path d="M' + (X(a.at) - 2.2) + ' 21.8l4.4 4.4M' + (X(a.at) + 2.2) + ' 21.8l-4.4 4.4" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><title>Attempt ' + a.attempt + ' at ' + U.clockS(a.at) + ' on ' + a.worker + '</title></g>';
+    });
+    o += '<text x="' + X(D.poisonAttempts[0].at) + '" y="48" font-size="10" fill="var(--ink-3)" text-anchor="start">' + U.clockS(D.poisonAttempts[0].at).slice(0, 5) + '</text>';
+    o += '<text x="' + X(D.poisonAttempts[9].at) + '" y="48" font-size="10" fill="var(--ink-3)" text-anchor="end">' + U.clockS(D.poisonAttempts[9].at).slice(0, 5) + '</text>';
+    o += '<text x="' + X((D.poisonAttempts[4].at + D.poisonAttempts[6].at) / 2) + '" y="10" font-size="10" fill="var(--ink-3)" text-anchor="middle">gaps grow with backoff: 1, 2, 4, 8, 16, 30 min</text>';
+    return '<p class="ev-cap">Attempts on #' + D.POISON.id + '</p><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="max-width:' + W * 1.4 + 'px;display:block" role="img" aria-label="' + pa.length + ' failed attempts">' + o + '</svg>';
+  }
+  function renderFindings(m, fs, ex) {
+    if (open == null) { open = {}; fs.slice(0, 2).forEach(function (f) { open[f.id] = true; }); }
+    if (!fs.length) {
+      $('#findings').innerHTML = '<div class="card all-clear">' + U.ICON.good + '<p style="margin:8px 0 0">No rule is firing. Every queue is within target, every claim has a fresh heartbeat, and nothing is failing repeatedly.</p></div>';
+      return;
+    }
+    $('#findings').innerHTML = fs.map(function (f) {
+      var x = ex[f.id], k = x.k;
+      var since = f.sinceM < m ? 'since ' + D.clock(f.sinceM) + ' · ' + D.fmtDur((m - f.sinceM) * 60) : 'just now';
+      return '<article class="finding ' + f.sev + (open[f.id] ? ' open' : '') + '" data-id="' + esc(f.id) + '">' +
+        '<button class="f-head" type="button" aria-expanded="' + !!open[f.id] + '">' +
+        '<span class="f-meta">' + U.status(f.sev, SEV[f.sev]) + '<span class="f-rule">' + esc(f.rule) + '</span><span>' + esc(f.queue) + '</span><span>' + since + '</span></span>' +
+        '<span class="f-title">' + esc(f.title) + '</span><span class="f-cause">' + x.cause + '</span><span class="f-chev">' + CHEV + '</span></button>' +
+        '<div class="f-body"><div class="evidence"><div class="ev-chart">' +
+        (x.chart ? '<p class="ev-cap">' + esc(x.chart.cap) + '</p><div class="chart" data-chart="' + esc(f.id) + '"></div>' + (x.chart.legend ? '<div class="legend" style="margin-top:4px">' + x.chart.legend.map(function (l) { return '<span><i style="background:' + l[0] + '"></i>' + l[1] + '</span>'; }).join('') + '</div>' : '') : '') +
+        (x.attempts ? attemptsStrip(x.attempts) : '') + '</div>' +
+        '<dl class="kv facts">' + x.facts.map(function (p) { return '<dt>' + esc(p[0]) + '</dt><dd>' + p[1] + '</dd>'; }).join('') + '</dl></div>' +
+        '<div class="section-t">Safe next steps</div><ol class="steps">' + x.steps.map(function (st) { return '<li><span>' + st.t + '</span>' + (st.a ? '<span class="st-act">' + st.a + '</span>' : '') + '</li>'; }).join('') + '</ol>' +
+        (x.links ? '<div class="f-links">' + x.links.map(function (l) { return '<a href="' + esc(l[1]) + '"' + (l[1].indexOf('#find:') === 0 ? ' data-find="' + esc(l[1].slice(6)) + '"' : '') + '>' + esc(l[0]) + ' →</a>'; }).join('') + '</div>' : '') +
+        '<details class="rule-d"><summary>How this was detected</summary><p>' + esc(x.rule) + '</p><pre class="sql">' + U.sqlHtml(x.sql) + '</pre></details>' +
+        '</div></article>';
+    }).join('');
+    fs.forEach(function (f) { if (open[f.id]) drawChart(f, ex[f.id]); });
+    $$('#findings .finding').forEach(function (el) {
+      var f = fs.filter(function (x) { return x.id === el.dataset.id; })[0];
+      $('.f-head', el).addEventListener('click', function () {
+        open[f.id] = !open[f.id]; el.classList.toggle('open', open[f.id]);
+        $('.f-head', el).setAttribute('aria-expanded', String(open[f.id]));
+        if (open[f.id]) drawChart(f, ex[f.id]);
+      });
+      $$('[data-act]', el).forEach(function (b) { b.addEventListener('click', function () { ACT[b.dataset.act](U.now(), f, b.dataset.arg); }); });
+      $$('[data-find]', el).forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); ACT.find(U.now(), f, a.dataset.find); }); });
+    });
+  }
+  function drawChart(f, x) {
+    var host = $('[data-chart="' + f.id + '"]'); if (!host || !x.chart) return;
+    host._render = null; host.innerHTML = '';
+    U.chart(host, x.chart.opts);
+  }
+
+  /* ---------- item and file lookup ---------- */
+  var TRIES = ['#' + D.POISON.id, 'PAY-DEMO-1030-0412', 'PAY-DEMO-BULK-41877', 'POST-DEMO-55102399', D.BULK.name];
+  function journeyOf(it, m) {
+    var nowS = m * 60 + 59, st = [], status = '', worker = it.worker;
+    if (nowS < it.createdS) return null;
+    if (it.kind === 'poison') {
+      st.push({ c: 'ok', t: it.createdS, h: 'Written by AIS', d: 'row ' + it.row + ' of ' + it.batch });
+      it.attempts.forEach(function (a) { if (a.at <= nowS) st.push({ c: 'bad', t: a.at, h: 'Attempt ' + a.attempt + ' failed on ' + a.worker, d: 'IllegalArgumentException: creditor IBAN checksum invalid' }); });
+      if (nowS >= it.deadS) { st.push({ c: 'bad', t: it.deadS, h: 'Moved to dead', d: 'ten attempts used up' }); status = U.badge('critical', 'Dead'); }
+      else { var nx = it.attempts.filter(function (a) { return a.at > nowS; })[0]; st.push({ c: 'now', t: nx ? nx.at : nowS, h: nx ? 'Next attempt scheduled' : 'Waiting', d: 'retry backoff' }); status = U.badge('warning', 'Retrying'); }
+    } else if (it.kind === 'stuck') {
+      st.push({ c: 'ok', t: it.createdS, h: 'Written by AIS', d: 'row ' + it.row + ' of ' + it.batch });
+      if (nowS >= it.claimS) st.push({ c: 'ok', t: it.claimS, h: 'Claimed by ' + it.worker, d: 'attempt 1 started' });
+      var lastHb = D.STUCK.min * 60 + D.STUCK.sec;
+      if (nowS >= lastHb + 90) {
+        st.push({ c: 'warn', t: lastHb, h: 'Last heartbeat from ' + it.worker, d: 'the consumer has said nothing since' });
+        st.push({ c: 'now', t: nowS, h: 'Still claimed ' + D.fmtDur(nowS - lastHb) + ' later', d: 'no other consumer can take it until the claim is released' });
+        status = U.badge('serious', 'Stuck');
+      } else { status = U.badge('info', 'In flight'); }
+    } else if (it.kind === 'bulk' || it.kind === 'storm') {
+      var s = D.S[it.queue], cm = Math.floor(it.createdS / 60);
+      st.push({ c: 'ok', t: it.createdS, h: 'Written by ' + (it.kind === 'bulk' ? 'AIS' : 'MMP'), d: it.kind === 'bulk' ? 'row ' + it.row + ' of ' + it.batch : 'posting for a completed payment' });
+      if (it.kind === 'bulk') {
+        // FIFO: picked once everything that arrived before it has been taken
+        var need = D.sum(s.arr, 0, cm - 1) + Math.round(s.arr[cm] * (it.createdS % 60) / 60), pick = null, acc = 0;
+        for (var i = 0; i < D.N; i++) { acc += s.done[i]; if (acc >= need - s.stuck[i] - 1) { pick = Math.max(i, cm); break; } }
+        if (pick != null && pick <= m) {
+          st.push({ c: 'ok', t: pick * 60 + 12, h: 'Claimed by mmp-app-0' + (1 + it.row % 2 * 3), d: 'waited ' + D.fmtDur(pick * 60 + 12 - it.createdS) + ' in the queue' });
+          st.push({ c: 'ok', t: pick * 60 + 15, h: 'Done', d: 'processing took 3 seconds' });
+          status = U.badge('good', 'Done');
+        } else {
+          var ahead = Math.max(0, need - D.sum(s.done, 0, m)), v = D.queueAt(it.queue, m);
+          st.push({ c: 'now', t: nowS, h: 'Waiting ' + D.fmtDur(nowS - it.createdS), d: D.fmtNum(ahead) + ' items ahead of it' + (v.out5 > 0 ? '; expected to be picked up around ' + D.clock(Math.min(D.N - 1, m + Math.ceil(ahead / v.out5))) : '') });
+          status = U.badge('info', 'Waiting');
+        }
+      } else {
+        var t = it.createdS + 8, gaps = [0, 61, 122, 243, 485];
+        for (var a = 0; a < 5; a++) {
+          t += gaps[a]; if (t > nowS) { st.push({ c: 'now', t: t, h: 'Attempt ' + (a + 1) + ' scheduled', d: 'retry backoff' }); status = U.badge('warning', 'Retrying'); break; }
+          st.push({ c: 'bad', t: t, h: 'Attempt ' + (a + 1) + ' failed on ledger-svc-0' + (1 + a % 2), d: 'SocketTimeoutException: Read timed out (cbs-gateway) after 5000 ms' });
+        }
+        if (!status) { st.push({ c: 'bad', t: t + 1, h: 'Moved to dead', d: 'five attempts used up during the gateway outage' }); status = U.badge('critical', 'Dead'); }
+      }
+    }
+    return { steps: st, status: status };
+  }
+  function renderSearch(m) {
+    var raw = query.trim(), out = '';
+    $('#tries').innerHTML = '<span>Try</span>' + TRIES.map(function (t) { return '<button type="button" data-try="' + esc(t) + '" title="' + esc(t) + '">' + esc(t) + '</button>'; }).join('');
+    $$('#tries [data-try]').forEach(function (b) { b.addEventListener('click', function () { $('#q').value = b.dataset.try; query = b.dataset.try; renderSearch(U.now()); }); });
+    if (!raw) { $('#result').innerHTML = ''; return; }
+    var key = raw.replace(/^#/, '').toLowerCase();
+    var it = D.ITEMS.filter(function (x) { return String(x.id) === key || x.ref.toLowerCase() === key; })[0];
+    var b = !it && D.batches[Object.keys(D.batches).filter(function (n) { return n.toLowerCase() === key || (key.length >= 8 && n.toLowerCase().indexOf(key) >= 0); })[0]];
+    if (it) {
+      var j = journeyOf(it, m);
+      if (!j) out = '<p class="muted" style="font-size:12.5px">#' + it.id + ' does not exist yet at ' + D.clock(m) + '. It is written at ' + U.clockS(it.createdS) + '.</p>';
+      else {
+        out = '<div class="result-h"><b>#' + it.id + '</b><span class="muted mono" style="font-size:12px">' + esc(it.ref) + '</span>' + j.status + '</div>' +
+          '<dl class="kv facts" style="margin-bottom:12px"><dt>Queue</dt><dd class="mono">' + esc(it.queue) + '</dd><dt>Source</dt><dd class="mono">' + esc(it.batch) + '</dd></dl>' +
+          '<ol class="journey">' + j.steps.map(function (s) { return '<li class="' + s.c + '"><div class="jt">' + U.clockS(s.t) + '</div><div>' + esc(s.h) + '</div><div class="jd">' + esc(s.d || '') + '</div></li>'; }).join('') + '</ol>';
+        if (it.kind === 'stuck' && m * 60 + 59 >= D.STUCK.min * 60 + D.STUCK.sec + 90) out += '<div class="action-row">' + btn('Release ' + D.STUCK.worker + ' claims…', 'release') + '</div>';
+        if (it.kind === 'poison') out += '<div class="action-row">' + btn('Retry after fix…', 'retryPoison') + btn('Cancel, repaired by hand…', 'discardPoison', null, 'ghost') + '</div>';
+      }
+    } else if (b && !b.stream) {
+      var st = batchState(b, m), t = Math.max(1, st.arrived), pct = function (n) { return (n / t * 100).toFixed(2) + '%'; };
+      if (!st.arrived) out = '<p class="muted" style="font-size:12.5px">' + esc(b.name) + ' has not landed yet at ' + D.clock(m) + '.</p>';
+      else {
+        var state = st.open ? Math.floor(st.done / t * 100) + '% done, ' + D.fmtNum(st.open) + ' to go' : st.stuck ? st.stuck + ' stuck: the file cannot finish' : st.dead ? st.dead + ' dead: needs repair' : 'complete';
+        out = '<div class="result-h"><b style="font-size:13px;overflow-wrap:anywhere">' + esc(b.name) + '</b></div>' +
+          '<dl class="kv facts"><dt>Queue</dt><dd class="mono">' + esc(b.queue) + '</dd><dt>Landed</dt><dd>' + D.clock(b.firstMin) + '</dd><dt>Rows</dt><dd>' + D.fmtNum(st.arrived) + '</dd><dt>State</dt><dd>' + esc(state) + '</dd></dl>' +
+          '<div class="file-prog" role="img" aria-label="' + esc(state) + '">' + (st.done ? '<i style="width:' + pct(st.done) + ';background:var(--s3)"></i>' : '') + (st.open ? '<i style="width:' + pct(st.open) + ';background:var(--s1)"></i>' : '') +
+          (st.stuck ? '<i style="width:max(4px,' + pct(st.stuck) + ');background:var(--serious)"></i>' : '') + (st.dead ? '<i style="width:max(4px,' + pct(st.dead) + ');background:var(--critical)"></i>' : '') + '</div>' +
+          '<div class="legend"><span><i style="background:var(--s3)"></i>Done</span><span><i style="background:var(--s1)"></i>To go</span><span><i style="background:var(--serious)"></i>Stuck</span><span><i style="background:var(--critical)"></i>Dead</span></div>' +
+          '<p class="muted" style="font-size:12px;margin:10px 0 0">One query on <span class="mono">batch_ref</span> answers "has my file finished?", which today means a support ticket.</p>';
+      }
+    } else out = '<p class="muted" style="font-size:12.5px">Nothing matches "' + esc(raw) + '" in this demo. The real page searches <span class="mono">id</span>, <span class="mono">payload_ref</span> and <span class="mono">batch_ref</span>, all indexed.</p>';
+    $('#result').innerHTML = out;
+    $$('#result [data-act]').forEach(function (bt) { bt.addEventListener('click', function () { ACT[bt.dataset.act](U.now(), { queue: 'payments.inbound' }); }); });
+  }
+  $('#searchForm').addEventListener('submit', function (e) { e.preventDefault(); query = $('#q').value; renderSearch(U.now()); });
+  $('#q').addEventListener('input', function () { if (!$('#q').value) { query = ''; renderSearch(U.now()); } });
+
+  /* ---------- error fingerprints by kind ---------- */
+  var KINDS = [
+    { k: 'dependency', label: 'Dependency', advice: 'Something downstream is failing. Pause, wait for it, then retry in bulk.' },
+    { k: 'deterministic', label: 'Data', advice: 'Retries never fix these. Repair the item, then retry or close it.' },
+    { k: 'transient', label: 'Transient', advice: 'Retries fix these. Only a rising rate is worth a look.' }
+  ];
+  function renderFps(m) {
+    var rows = [];
+    D.QUEUES.forEach(function (q) {
+      var s = D.S[q.name];
+      Object.keys(s.failFp).forEach(function (k) { var n = D.sum(s.failFp[k], m - 59, m); if (n) rows.push({ k: k, q: q.name, n: n, fp: D.FP[k] }); });
+    });
+    $('#fps').innerHTML = KINDS.map(function (K) {
+      var rs = rows.filter(function (r) { return r.fp.kind === K.k; }).sort(function (a, b) { return b.n - a.n; });
+      var tot = rs.reduce(function (a, r) { return a + r.n; }, 0);
+      return '<div class="fp-group"><h3>' + K.label + '<span>' + (tot ? D.fmtNum(tot) + ' failures' : 'none') + '</span></h3>' +
+        (rs.length ? rs.map(function (r) { return '<div class="fp"><code>' + esc(r.fp.key) + '</code><span class="n">' + D.fmtNum(r.n) + '</span><span class="w">' + esc(r.q) + '</span></div>'; }).join('') + '<div class="fp w" style="padding-top:6px"><span class="w" style="color:var(--ink-2)">' + esc(K.advice) + '</span></div>' : '') + '</div>';
+    }).join('');
+  }
+
+  /* ---------- timeline and incident notes ---------- */
+  var KC = { poison: 'var(--critical)', stuck: 'var(--serious)', spike: 'var(--s1)', storm: 'var(--critical)', breach: 'var(--critical)', recover: 'var(--good)' };
+  function pastEvents(m) { return D.EVENTS.filter(function (e) { return e.m * 60 + e.s <= m * 60 + 59; }); }
+  function renderTimeline(m) {
+    var ev = pastEvents(m);
+    $('#tl').innerHTML = ev.map(function (e) {
+      return '<li><button type="button" data-m="' + e.m + '" title="Jump to ' + D.clock(e.m) + '"><span class="tt">' + U.clockS(e.m * 60 + e.s).slice(0, 5) + '</span><span class="tdot"><i style="--c:' + (KC[e.kind] || 'var(--axis)') + '"></i></span>' +
+        '<span class="tx"><b>' + esc(e.title) + '</b><span>' + esc(e.detail) + '</span></span></button></li>';
+    }).join('') + '<li class="now"><span class="tt">' + D.clock(m) + '</span><span class="tdot"><i style="--c:var(--accent)"></i></span><span class="tx"><b>Now</b><span>' + (ev.length ? ev.length + ' events so far' : 'a quiet day so far') + '</span></span></li>';
+    $$('#tl [data-m]').forEach(function (b) { b.addEventListener('click', function () { U.setTime(+b.dataset.m + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }); });
+  }
+  function incidentNotes(m) {
+    var fs = D.findingsAt(m), ex = {}; fs.forEach(function (f) { ex[f.id] = explain(f, m); });
+    var strip = function (h) { return h.replace(/<[^>]+>/g, ''); };
+    var L = ['# DEMO incident notes: DBQ, ' + D.DATE_LABEL, '', 'Drafted by the triage page at ' + D.clock(m) + '. Fictional data.', '', '## Impact', ''];
+    D.QUEUES.forEach(function (q) {
+      var s = D.S[q.name], over = 0, first = null, peak = 0;
+      for (var i = 0; i <= m; i++) if (s.oldest[i] >= q.slo) { over++; if (first == null) first = i; peak = Math.max(peak, s.oldest[i]); }
+      if (over) L.push('- ' + q.name + ' was past its ' + D.fmtDur(q.slo) + ' wait target for ' + over + ' minutes from ' + D.clock(first) + '; the oldest item reached ' + D.fmtDur(peak) + '.');
+    });
+    if (m >= D.STUCK.min) L.push('- ' + D.STUCK.worker + ' held 28 claims without heartbeating from ' + D.clock(D.STUCK.min, D.STUCK.sec) + '.');
+    var ld = D.S['ledger.postings'].dead[m]; if (ld) L.push('- ' + D.fmtNum(ld) + ' ledger postings were dead-lettered by cbs-gateway timeouts.');
+    L.push('', '## Timeline', '');
+    pastEvents(m).forEach(function (e) { L.push('- ' + U.clockS(e.m * 60 + e.s) + ' ' + e.title + ' (' + e.queue + ')'); });
+    L.push('', '## Open findings at ' + D.clock(m), '');
+    fs.forEach(function (f) { L.push('- **' + f.rule + '**: ' + f.title + '. ' + strip(ex[f.id].cause)); });
+    L.push('', '## Actions taken', '', '- (The real console fills this from dbq_action_audit: who released, retried or paused what, and who approved it.)', '', '## Follow-ups', '',
+      '- Claims need a lease so a silent consumer cannot hold work forever.', '- Bulk files from AIS should carry a lower priority than the 15-minute files.', '- Alert on oldest-item age and heartbeat age, not on queue depth.');
+    return L.join('\n');
+  }
+  $('#pmBtn').addEventListener('click', function () {
+    var md = incidentNotes(U.now());
+    U.modal('<div class="modal-h"><div class="eyebrow">Incident notes</div><h3 style="font-size:18px;margin-top:4px">Draft for the incident ticket</h3></div>' +
+      '<div class="modal-b"><p style="margin:0 0 10px;color:var(--ink-2);font-size:13px">Built from the timeline and the open findings. Paste it into the ticket and fill in the actions.</p><pre class="sql" id="mdOut" style="max-height:46vh;white-space:pre-wrap">' + esc(md) + '</pre></div>' +
+      '<div class="modal-f"><button class="btn ghost" data-close>Close</button><button class="btn primary" id="copyMd">Copy Markdown</button></div>', function (el) {
+      $('#copyMd', el).addEventListener('click', function () {
+        var done = function () { U.toast('Copied to the clipboard.'); };
+        try { navigator.clipboard.writeText(md).then(done, function () { selectPre(); }); } catch (e) { selectPre(); }
+      });
+    });
+  });
+  function selectPre() { var r = document.createRange(); r.selectNodeContents($('#mdOut')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); U.toast('Selected: press Ctrl+C or Cmd+C to copy.'); }
+
+  /* ---------- wait target strip ---------- */
+  function renderSlo(m) {
+    var cells = 48, per = 10;
+    $('#sloAxis').innerHTML = ['07:00', '09:00', '11:00', '13:00', '15:00'].map(function (t) { return '<span>' + t + '</span>'; }).join('');
+    $('#slo').innerHTML = D.QUEUES.map(function (q) {
+      var s = D.S[q.name], over = 0, html = '';
+      for (var i = 0; i <= m; i++) if (s.oldest[i] >= q.slo) over++;
+      for (var c = 0; c < cells; c++) {
+        var a = c * per, b = Math.min(D.N - 1, a + per - 1);
+        if (a > m) { html += '<i class="f"></i>'; continue; }
+        var worst = 0; for (var j = a; j <= Math.min(b, m); j++) worst = Math.max(worst, s.oldest[j]);
+        html += '<i class="' + (worst >= q.slo ? 'c' : worst >= q.slo * 0.66 ? 'w' : '') + '" data-t="' + D.clock(a) + '–' + D.clock(b + 1) + '" data-v="' + worst + '" data-q="' + q.name + '"></i>';
+      }
+      return '<div class="slo-row"><span class="slo-name" title="' + esc(q.name) + '">' + esc(q.name) + '</span><div class="cells">' + html + '</div>' +
+        '<span class="slo-stat">' + (over ? '<b>' + over + ' min</b> past target · ' + (over / 4.8).toFixed(1).replace(/\.0$/, '') + '× budget' : 'within target all day') + '</span></div>';
+    }).join('');
+    $$('#slo .cells i[data-t]').forEach(function (c) {
+      c.addEventListener('pointermove', function (e) {
+        var q = D.QUEUES[D.QI[c.dataset.q]];
+        U.tip(U.tipRows(c.dataset.q + ' · ' + c.dataset.t, [{ color: +c.dataset.v >= q.slo ? 'var(--critical)' : 'var(--good)', value: D.fmtDur(+c.dataset.v) || '0s', label: 'worst oldest wait (target ' + D.fmtDur(q.slo) + ')' }]), e.clientX, e.clientY);
+      });
+      c.addEventListener('pointerleave', function () { U.tip(null); });
+    });
+  }
+
+  function render(m) {
+    var fs = D.findingsAt(m), ex = {};
+    fs.forEach(function (f) { ex[f.id] = explain(f, m); });
+    renderHero(m, fs, ex); renderFindings(m, fs, ex); renderSearch(m); renderFps(m); renderTimeline(m); renderSlo(m);
+  }
+  U.onTime(function (m, o) { if (o.chapter) open = null; render(m); });
+  window.addEventListener('dbq-theme', function () { render(U.now()); });
+  var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { render(U.now()); }, 120); });
+  U.start();
+})();
+</script>
+</body>
+</html>
